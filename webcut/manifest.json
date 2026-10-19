@@ -35,6 +35,7 @@
         "<all_urls>"
       ],
       "js": [
+        "shared/messages.js",
         "content.js"
       ],
       "css": [
