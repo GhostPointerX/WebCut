@@ -415,10 +415,298 @@ async function openTab(message) {
   return { tabId: result && typeof result === 'object' ? result.id : result };
 }
 
+const MAX_RESOURCE_BYTES = 15 * 1024 * 1024;
+const RESOURCE_TIMEOUT_MS = 15 * 1000;
+const RESTRICTED_SCHEMES = new Set([
+  'about:',
+  'blob:',
+  'chrome:',
+  'chrome-extension:',
+  'data:',
+  'devtools:',
+  'edge:',
+  'file:',
+  'moz-extension:',
+  'opera:',
+  'view-source:',
+  'vivaldi:',
+]);
+
+function headerValue(headers, name) {
+  if (!headers) return null;
+  if (typeof headers.get === 'function') return headers.get(name);
+  const wanted = name.toLowerCase();
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === wanted) return headers[key];
+  }
+  return null;
+}
+
+function bytesToBase64(value) {
+  const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length));
+    binary += String.fromCharCode(...chunk);
+  }
+  if (typeof btoa === 'function') return btoa(binary);
+  if (typeof Buffer !== 'undefined') return Buffer.from(bytes).toString('base64');
+  throw new Error('Base64 encoding is unavailable');
+}
+
+function validResourceUrl(value) {
+  if (typeof value !== 'string' || value.trim() === '') throw new Error('url is required');
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch (error) {
+    throw new Error('url must use http or https');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('url must use http or https');
+  }
+  return parsed.href;
+}
+
+async function fetchResource(message) {
+  object(message, 'message');
+  const url = validResourceUrl(message.url);
+  const as = message.as === undefined ? 'text' : message.as;
+  if (as !== 'text' && as !== 'dataUrl') {
+    throw new Error('as must be "text" or "dataUrl"');
+  }
+  if (typeof fetch !== 'function') throw new Error('fetch is unavailable');
+  if (typeof AbortController !== 'function') throw new Error('AbortController is unavailable');
+
+  const controller = new AbortController();
+  let timedOut = false;
+  let timer;
+  const timeoutError = new Error('Request timed out');
+  const timeoutPromise = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(timeoutError);
+    }, RESOURCE_TIMEOUT_MS);
+  });
+  let response;
+  try {
+    response = await Promise.race([
+      fetch(url, {
+        credentials: 'omit',
+        redirect: 'follow',
+        signal: controller.signal,
+      }),
+      timeoutPromise,
+    ]);
+  } catch (error) {
+    clearTimeout(timer);
+    if (timedOut || error === timeoutError || (error && error.name === 'AbortError')) {
+      throw new Error('Request timed out');
+    }
+    throw new Error(`Network error: ${error && error.message ? error.message : 'request failed'}`);
+  }
+
+  const status = Number(response && response.status);
+  if (!response || status < 200 || status >= 300 || response.ok === false) {
+    clearTimeout(timer);
+    return { ok: false, status, error: `HTTP ${status}` };
+  }
+  const length = Number(headerValue(response.headers, 'content-length'));
+  if (Number.isFinite(length) && length > MAX_RESOURCE_BYTES) {
+    clearTimeout(timer);
+    return { ok: false, error: 'Resource too large' };
+  }
+
+  let body;
+  try {
+    body = await Promise.race([response.arrayBuffer(), timeoutPromise]);
+  } catch (error) {
+    if (timedOut || error === timeoutError || (error && error.name === 'AbortError')) {
+      throw new Error('Request timed out');
+    }
+    throw new Error(`Network error: ${error && error.message ? error.message : 'response failed'}`);
+  } finally {
+    clearTimeout(timer);
+  }
+  if (body.byteLength > MAX_RESOURCE_BYTES) {
+    return { ok: false, error: 'Resource too large' };
+  }
+  if (as === 'text') {
+    return { status, text: new TextDecoder().decode(body) };
+  }
+  const contentType = headerValue(response.headers, 'content-type') || 'application/octet-stream';
+  return { status, dataUrl: `data:${contentType};base64,${bytesToBase64(body)}` };
+}
+
+function finiteNumber(value) {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function computeCropRect(rect, dpr, bitmapWidth, bitmapHeight) {
+  object(rect, 'rect');
+  for (const key of ['x', 'y', 'width', 'height']) {
+    if (!finiteNumber(rect[key])) throw new Error(`rect.${key} must be a number`);
+  }
+  if (rect.width <= 0 || rect.height <= 0) throw new Error('rect width and height must be greater than zero');
+  if (!finiteNumber(dpr) || dpr < 0.5 || dpr > 8) throw new Error('dpr must be between 0.5 and 8');
+  if (!finiteNumber(bitmapWidth) || !finiteNumber(bitmapHeight) || bitmapWidth <= 0 || bitmapHeight <= 0) {
+    throw new Error('bitmap dimensions must be positive numbers');
+  }
+
+  const left = Math.floor(rect.x * dpr);
+  const top = Math.floor(rect.y * dpr);
+  const right = Math.ceil((rect.x + rect.width) * dpr);
+  const bottom = Math.ceil((rect.y + rect.height) * dpr);
+  const x = Math.min(bitmapWidth, Math.max(0, left));
+  const y = Math.min(bitmapHeight, Math.max(0, top));
+  const clampedRight = Math.min(bitmapWidth, Math.max(0, right));
+  const clampedBottom = Math.min(bitmapHeight, Math.max(0, bottom));
+  const width = clampedRight - x;
+  const height = clampedBottom - y;
+  if (width <= 0 || height <= 0) return null;
+  return { sx: x, sy: y, sw: width, sh: height };
+}
+
+function chromeCall(context, name, args) {
+  if (!context || typeof context[name] !== 'function') {
+    return Promise.reject(new Error(`chrome.${name} is unavailable`));
+  }
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      if (error) reject(error);
+      else resolve(value);
+    };
+    const callback = (value) => {
+      const lastError = typeof chrome !== 'undefined' && chrome.runtime ? chrome.runtime.lastError : null;
+      if (lastError) finish(new Error(lastError.message || String(lastError)));
+      else finish(null, value);
+    };
+    let result;
+    try {
+      result = context[name](...args, callback);
+    } catch (error) {
+      finish(error);
+      return;
+    }
+    if (result && typeof result.then === 'function') result.then((value) => finish(null, value), (error) => finish(error));
+  });
+}
+
+async function takeScreenshot(message, sender) {
+  object(message, 'message');
+  if (!message.rect || typeof message.rect !== 'object' || Array.isArray(message.rect)) {
+    throw new Error('rect must be an object');
+  }
+  for (const key of ['x', 'y', 'width', 'height']) {
+    if (!finiteNumber(message.rect[key])) throw new Error(`rect.${key} must be a number`);
+  }
+  if (message.rect.width <= 0 || message.rect.height <= 0) {
+    throw new Error('rect width and height must be greater than zero');
+  }
+  if (!finiteNumber(message.dpr) || message.dpr < 0.5 || message.dpr > 8) {
+    throw new Error('dpr must be between 0.5 and 8');
+  }
+  const tabs = typeof chrome !== 'undefined' ? chrome.tabs : null;
+  if (!tabs || typeof tabs.captureVisibleTab !== 'function') throw new Error('chrome.tabs.captureVisibleTab is unavailable');
+  const senderWindowId = sender && sender.tab && sender.tab.windowId;
+  const currentWindow = typeof chrome !== 'undefined' && chrome.windows
+    ? chrome.windows.WINDOW_ID_CURRENT
+    : undefined;
+  const windowId = Number.isInteger(senderWindowId) ? senderWindowId : currentWindow;
+  const captured = await chromeCall(tabs, 'captureVisibleTab', [windowId, { format: 'png' }]);
+  if (typeof captured !== 'string' || !captured.startsWith('data:')) throw new Error('Screenshot capture returned no data');
+  if (typeof fetch !== 'function') throw new Error('fetch is unavailable');
+  const sourceResponse = await fetch(captured);
+  if (!sourceResponse || typeof sourceResponse.blob !== 'function') throw new Error('Screenshot data could not be decoded');
+  const sourceBlob = await sourceResponse.blob();
+  if (typeof createImageBitmap !== 'function') throw new Error('createImageBitmap is unavailable');
+  if (typeof OffscreenCanvas !== 'function') throw new Error('OffscreenCanvas is unavailable');
+  const bitmap = await createImageBitmap(sourceBlob);
+  try {
+    const crop = computeCropRect(message.rect, message.dpr, bitmap.width, bitmap.height);
+    if (!crop) throw new Error('Element is not visible in the viewport');
+    const canvas = new OffscreenCanvas(crop.sw, crop.sh);
+    const context = canvas.getContext('2d');
+    if (!context || typeof context.drawImage !== 'function') throw new Error('2D canvas is unavailable');
+    context.drawImage(bitmap, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, crop.sw, crop.sh);
+    if (typeof canvas.convertToBlob !== 'function') throw new Error('PNG encoding is unavailable');
+    const output = await canvas.convertToBlob({ type: 'image/png' });
+    if (!output || typeof output.arrayBuffer !== 'function') throw new Error('PNG encoding returned no data');
+    return { dataUrl: `data:image/png;base64,${bytesToBase64(await output.arrayBuffer())}` };
+  } finally {
+    if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+  }
+}
+
+function restrictedUrl(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (error) {
+    return true;
+  }
+  if (RESTRICTED_SCHEMES.has(parsed.protocol)) return true;
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'chrome.google.com' && parsed.pathname.toLowerCase().startsWith('/webstore')) return true;
+  if (host === 'chromewebstore.google.com') return true;
+  if (host === 'microsoftedge.microsoft.com' && parsed.pathname.toLowerCase().startsWith('/addons')) return true;
+  if (host === 'addons.mozilla.org' || host === 'addons.opera.com') return true;
+  return false;
+}
+
+async function resolveTabId(tabId) {
+  if (tabId !== undefined && tabId !== null) {
+    if (!Number.isInteger(tabId)) throw new Error('tabId must be an integer');
+    return tabId;
+  }
+  const tabs = await chromeCall(chrome.tabs, 'query', [{ active: true, currentWindow: true }]);
+  const tab = Array.isArray(tabs) ? tabs[0] : null;
+  if (!tab || !Number.isInteger(tab.id)) throw new Error('Active tab not found');
+  return tab.id;
+}
+
+function missingReceiver(error) {
+  const text = error && error.message ? error.message : String(error);
+  return /receiving end does not exist|could not establish connection|message port closed before a response was received/i.test(text);
+}
+
+async function injectContent(tabId) {
+  if (!chrome.scripting) throw new Error('chrome.scripting is unavailable');
+  await chromeCall(chrome.scripting, 'executeScript', [{ target: { tabId }, files: ['shared/messages.js', 'content.js'] }]);
+  await chromeCall(chrome.scripting, 'insertCSS', [{ target: { tabId }, files: ['content.css'] }]);
+}
+
+async function sendToTab(tabId, message) {
+  try {
+    if (typeof chrome === 'undefined' || !chrome.tabs) throw new Error('chrome.tabs is unavailable');
+    const resolvedTabId = await resolveTabId(tabId);
+    const tabs = await chromeCall(chrome.tabs, 'get', [resolvedTabId]);
+    if (!tabs || restrictedUrl(tabs.url)) throw new Error('WebCut cannot run on this page');
+    let response;
+    try {
+      response = await chromeCall(chrome.tabs, 'sendMessage', [resolvedTabId, message]);
+    } catch (error) {
+      if (!missingReceiver(error)) throw error;
+      await injectContent(resolvedTabId);
+      response = await chromeCall(chrome.tabs, 'sendMessage', [resolvedTabId, message]);
+    }
+    if (response && typeof response === 'object' && response.ok === false) return response;
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error && error.message ? error.message : String(error) };
+  }
+}
+
 const handlers = {
   [MESSAGE_MAP.openTab]: openTab,
-  [MESSAGE_MAP.fetchResource]: () => ({ ok: false, error: 'Not implemented yet' }),
-  [MESSAGE_MAP.takeScreenshot]: () => ({ ok: false, error: 'Not implemented yet' }),
+  [MESSAGE_MAP.fetchResource]: fetchResource,
+  [MESSAGE_MAP.takeScreenshot]: takeScreenshot,
   [MESSAGE_MAP.savePage]: savePage,
   [MESSAGE_MAP.getPages]: getPages,
   [MESSAGE_MAP.getPageContent]: getPageContent,
@@ -433,18 +721,18 @@ const handlers = {
   [MESSAGE_MAP.deleteFolder]: deleteFolder,
   [MESSAGE_MAP.addToFolder]: (message) => changeFolderLink(message, true),
   [MESSAGE_MAP.removeFromFolder]: (message) => changeFolderLink(message, false),
-  [MESSAGE_MAP.toggleToolbar]: () => ({ ok: false, error: 'Not implemented yet' }),
-  [MESSAGE_MAP.toggleDrawer]: () => ({ ok: false, error: 'Not implemented yet' }),
+  [MESSAGE_MAP.toggleToolbar]: (message) => sendToTab(message.tabId, message),
+  [MESSAGE_MAP.toggleDrawer]: (message) => sendToTab(message.tabId, message),
 };
 
-async function handleMessage(message) {
+async function handleMessage(message, sender) {
   try {
     if (!message || typeof message !== 'object' || Array.isArray(message) || typeof message.type !== 'string') {
       return { ok: false, error: 'Unknown message type' };
     }
     const handler = handlers[message.type];
     if (!handler) return { ok: false, error: 'Unknown message type' };
-    const data = await handler(message);
+    const data = await handler(message, sender);
     if (data && data.ok === false) return data;
     return { ok: true, ...(data || {}) };
   } catch (error) {
@@ -454,9 +742,9 @@ async function handleMessage(message) {
 
 if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage && typeof chrome.runtime.onMessage.addListener === 'function') {
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    handleMessage(message).then(sendResponse);
+    handleMessage(message, sender).then(sendResponse);
     return true;
   });
 }
 
-if (typeof module !== 'undefined') module.exports = { handleMessage };
+if (typeof module !== 'undefined') module.exports = { handleMessage, computeCropRect, sendToTab };

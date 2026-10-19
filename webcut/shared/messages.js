@@ -35,9 +35,9 @@ var MSG = Object.freeze({
   addToFolder: 'addToFolder',
   // Request: { type: "removeFromFolder", folderId: string, pageId: string }; response: { ok: boolean, error?: string }.
   removeFromFolder: 'removeFromFolder',
-  // Request: { type: "toggleToolbar" }; response: { ok: boolean, error?: string }.
+  // Request: { type: "toggleToolbar", tabId?: number }; response: { ok: boolean, error?: string }.
   toggleToolbar: 'toggleToolbar',
-  // Request: { type: "toggleDrawer" }; response: { ok: boolean, error?: string }.
+  // Request: { type: "toggleDrawer", tabId?: number }; response: { ok: boolean, error?: string }.
   toggleDrawer: 'toggleDrawer'
 });
 
