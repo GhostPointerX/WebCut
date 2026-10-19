@@ -36,10 +36,8 @@
       ],
       "js": [
         "shared/messages.js",
+        "shared/toolbar-state.js",
         "content.js"
-      ],
-      "css": [
-        "content.css"
       ],
       "run_at": "document_idle"
     }
@@ -47,7 +45,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "sidepanel-iframe.html"
+        "sidepanel-iframe.html",
+        "content.css"
       ],
       "matches": [
         "<all_urls>"

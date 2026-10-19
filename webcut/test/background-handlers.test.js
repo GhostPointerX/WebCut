@@ -43,11 +43,6 @@ globalThis.chrome = {
       if (tabsState.injectionBehavior) return tabsState.injectionBehavior('executeScript', details, callback);
       callbackResult(callback);
     },
-    insertCSS(details, callback) {
-      tabsState.injectionCalls.push({ method: 'insertCSS', details });
-      if (tabsState.injectionBehavior) return tabsState.injectionBehavior('insertCSS', details, callback);
-      callbackResult(callback);
-    },
   },
 };
 
@@ -314,9 +309,13 @@ async function test(name, fn) {
     const result = await sendToTab(8, { type: 'toggle' });
      assertEqual(result.ok, true, 'retry response');
     assertEqual(tabsState.sendCalls.length, 2, 'send retry count');
-    assertEqual(tabsState.injectionCalls.length, 2, 'script and CSS injection count');
-    assertEqual(tabsState.injectionCalls[0].method, 'executeScript', 'script injected first');
-    assertEqual(tabsState.injectionCalls[1].method, 'insertCSS', 'CSS injected second');
+     assertEqual(tabsState.injectionCalls.length, 1, 'script injection count');
+     assertEqual(tabsState.injectionCalls[0].method, 'executeScript', 'script injected first');
+     assertEqual(
+       JSON.stringify(tabsState.injectionCalls[0].details.files),
+       JSON.stringify(['shared/messages.js', 'shared/toolbar-state.js', 'content.js']),
+       'toolbar dependencies injected',
+     );
   });
 
   await test('sendToTab reports injection failure', async () => {

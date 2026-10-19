@@ -555,16 +555,20 @@ function computeCropRect(rect, dpr, bitmapWidth, bitmapHeight) {
     throw new Error('bitmap dimensions must be positive numbers');
   }
 
-  const left = Math.floor(rect.x * dpr);
-  const top = Math.floor(rect.y * dpr);
-  const right = Math.ceil((rect.x + rect.width) * dpr);
-  const bottom = Math.ceil((rect.y + rect.height) * dpr);
+  const left = Math.round(rect.x * dpr);
+  const top = Math.round(rect.y * dpr);
+  const right = Math.round((rect.x + rect.width) * dpr);
+  const bottom = Math.round((rect.y + rect.height) * dpr);
   const x = Math.min(bitmapWidth, Math.max(0, left));
   const y = Math.min(bitmapHeight, Math.max(0, top));
   const clampedRight = Math.min(bitmapWidth, Math.max(0, right));
   const clampedBottom = Math.min(bitmapHeight, Math.max(0, bottom));
-  const width = clampedRight - x;
-  const height = clampedBottom - y;
+  let width = clampedRight - x;
+  let height = clampedBottom - y;
+  if (width === 0 && rect.x < bitmapWidth / dpr && rect.x + rect.width > 0) width = 1;
+  if (height === 0 && rect.y < bitmapHeight / dpr && rect.y + rect.height > 0) height = 1;
+  width = Math.min(width, bitmapWidth - x);
+  height = Math.min(height, bitmapHeight - y);
   if (width <= 0 || height <= 0) return null;
   return { sx: x, sy: y, sw: width, sh: height };
 }
@@ -678,8 +682,10 @@ function missingReceiver(error) {
 
 async function injectContent(tabId) {
   if (!chrome.scripting) throw new Error('chrome.scripting is unavailable');
-  await chromeCall(chrome.scripting, 'executeScript', [{ target: { tabId }, files: ['shared/messages.js', 'content.js'] }]);
-  await chromeCall(chrome.scripting, 'insertCSS', [{ target: { tabId }, files: ['content.css'] }]);
+  await chromeCall(chrome.scripting, 'executeScript', [{
+    target: { tabId },
+    files: ['shared/messages.js', 'shared/toolbar-state.js', 'content.js'],
+  }]);
 }
 
 async function sendToTab(tabId, message) {
