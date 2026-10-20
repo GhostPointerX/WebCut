@@ -27,13 +27,49 @@ WebCut injects a toolbar into normal web pages. It can capture the whole page or
 - Popup counters, capture buttons, settings, and local data clearing.
 - Side panel and in-page drawer with search, recent grouping, folders, preview, download, and delete actions.
 
-## Install
+## Setup
 
-1. Open Chrome and go to `chrome://extensions`.
-2. Enable **Developer mode**.
-3. Choose **Load unpacked**.
-4. Select the `webcut/` folder in this repository.
-5. Open a normal `http` or `https` page and click the WebCut extension icon.
+1. Use Node 24.20.0 from `.nvmrc`, or another Node release that satisfies `>=20`.
+2. Install the dependency-free project from a clean checkout:
+
+   ```bash
+   npm ci
+   ```
+
+3. Open Chrome and go to `chrome://extensions`.
+4. Enable **Developer mode**.
+5. Choose **Load unpacked**.
+6. Select the `webcut/` folder in this repository.
+
+## Run
+
+Open a normal `http` or `https` page and click the WebCut extension icon. The extension runs in Chrome after loading `webcut/` as an unpacked extension. The automated tests do not need a browser.
+
+## Test
+
+Run the test-file runner and JavaScript syntax checker from the repository root:
+
+```bash
+npm test
+npm run check
+```
+
+`npm test` runs every `*.test.js` file under `webcut/test` with the current Node executable. `npm run check` runs `node --check` on project JavaScript while skipping `.git`, `node_modules`, and `.opencode`.
+
+## Docker
+
+Build and run the test container from the repository root:
+
+```bash
+docker build -t webcut .
+docker run --rm webcut
+```
+
+The Docker image uses `node:24-slim` and runs `npm test`. Docker was not available in the development environment for this step.
+
+## Settings
+
+See [`.env.example`](.env.example). WebCut does not need environment variables or secrets. The only optional user setting is `hostUrl`, which is entered in the popup settings and is stored there; it is not an environment variable and is not used by the current extension code.
 
 ## Usage
 
@@ -55,6 +91,15 @@ Page captures use `WebCut-<website>.html`, where the website is the normalized H
 - `README.md` — user-facing project documentation.
 - `SPEC.md` — current architecture, message contract, storage shapes, and security decisions.
 - `LICENSE` — MIT license text.
+- `package.json` — dependency-free Node metadata and `test` / `check` scripts.
+- `package-lock.json` — npm lockfile for the empty dependency graph.
+- `scripts/run-tests.js` — Node test-file runner.
+- `scripts/check-syntax.js` — Node syntax-check runner.
+- `.nvmrc` — pinned Node 24.20.0 runtime version.
+- `Dockerfile` — Node 24 test image.
+- `.dockerignore` — Docker context exclusions.
+- `.env.example` — comment-only settings and secret guidance.
+- `.gitignore` — local, generated, and secret-file exclusions.
 - `webcut/` — Chrome extension source.
 - `webcut/README.md` — three-line pointer back to this document.
 - `webcut/manifest.json` — Manifest V3 metadata, permissions, entry points, and exposed extension resources.
@@ -140,11 +185,7 @@ All runtime message names come from `webcut/shared/messages.js`. The background 
 
 Captures, screenshots, settings, and folder data stay in `chrome.storage.local`. The extension has no server or upload path. `fetchResource` only downloads HTTP(S) resources encountered during the current page capture; it omits credentials, follows redirects, and applies a 15 MB resource limit and a 15 second timeout. The optional `hostUrl` value is validated as HTTPS and stored in settings, but no current extension code uses it for a request.
 
-## Testing
-
-`npm test` will be added in step 12.
-
-Manual extension checklist:
+## Manual extension checklist
 
 1. Load `webcut/` as an unpacked extension.
 2. Open `webcut/test/sample.html` from a local web server or a local file page where Chrome permits the extension.
@@ -168,7 +209,7 @@ Manual extension checklist:
 
 ## Credits
 
-Inspired by existing page-capture tools; code written from scratch. The project was built step by step with an AI agent and numbered git tags. Tags through `step-10b` are present now; the workflow is planned to continue through `step-13`.
+Inspired by existing page-capture tools; code written from scratch. The project was built step by step with an AI agent and numbered git tags. Tags through `step-11` are present, this step adds `step-12`, and the workflow is planned to continue through `step-13`.
 
 ## License
 

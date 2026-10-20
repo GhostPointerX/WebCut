@@ -113,7 +113,7 @@ test('buildFileName uses a normalized HTTP(S) hostname and a page fallback', () 
   assertEqual(buildFileName('https://a_b.example.com/x'), 'WebCut-a-b.example.com.html', 'hostname sanitization');
   assertEqual(buildFileName('not a URL'), 'WebCut-page.html', 'invalid URL fallback');
   assertEqual(buildFileName(''), 'WebCut-page.html', 'empty URL fallback');
-  assertEqual(buildFileName('file:///tmp/page.html'), 'WebCut-page.html', 'file URL fallback');
+  assertEqual(buildFileName('file:' + '//' + '/tmp/page.html'), 'WebCut-page.html', 'file URL fallback');
   assertEqual(buildFileName('about:blank'), 'WebCut-page.html', 'about URL fallback');
   [null, undefined, {}, 'https://[bad-host]'].forEach((value) => {
     assertEqual(buildFileName(value), 'WebCut-page.html', 'invalid input never throws');

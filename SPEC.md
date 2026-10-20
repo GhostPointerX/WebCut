@@ -97,4 +97,13 @@ The background creates and protects a `default` folder. Folder writes and page w
 - Cross-origin iframes are not recursively cloned.
 - Browser-owned and store pages are rejected by `isRestrictedUrl()`.
 - `hostUrl` is validated and stored but has no consumer in the current code.
-- `npm test` is a documentation placeholder until the test command is added in Step 12.
+- The Node test runner is a repository check; it does not replace manual Chrome extension testing.
+
+## Build and test
+
+- `package.json` contains no runtime or development dependencies. `package-lock.json` records the empty dependency graph.
+- `.nvmrc` pins Node 24.20.0. The Dockerfile uses the matching `node:24-slim` major image.
+- `npm ci` installs from the lockfile on a clean checkout.
+- `npm test` runs `scripts/run-tests.js`, which discovers every `*.test.js` file under `webcut/test` and runs it with the current Node executable.
+- `npm run check` runs `scripts/check-syntax.js`, which checks project JavaScript while skipping `.git`, `node_modules`, and `.opencode`.
+- The Dockerfile runs `npm test` with `NODE_ENV=test`. The extension itself still runs by loading `webcut/` as an unpacked Chrome extension.

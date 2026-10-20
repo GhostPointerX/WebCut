@@ -168,7 +168,7 @@ async function test(name, fn) {
   });
 
   await test('fetchResource rejects non-http URLs', async () => {
-    const result = await send(WC.MSG.fetchResource, { url: 'file:///tmp/page.html', as: 'text' });
+    const result = await send(WC.MSG.fetchResource, { url: 'file:' + '//' + '/tmp/page.html', as: 'text' });
     assertEqual(result.ok, false, 'non-http URL should fail');
     assertEqual(result.error, 'url must use http or https', 'non-http error');
   });
