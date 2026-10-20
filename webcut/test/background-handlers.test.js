@@ -4,6 +4,7 @@ const WC = require('../shared/messages.js');
 
 const tabsState = {
   activeTab: { id: 1, url: 'https://example.com/' },
+  lastFocusedTab: null,
   byId: Object.create(null),
   sendCalls: [],
   sendBehavior: null,
@@ -23,10 +24,18 @@ globalThis.chrome = {
   runtime: { onMessage: { addListener() {} } },
   tabs: {
     query(query, callback) {
-      callbackResult(callback, [tabsState.activeTab]);
+      const tab = tabsState.activeTab || tabsState.lastFocusedTab;
+      callbackResult(callback, tab ? [tab] : []);
     },
     get(tabId, callback) {
-      callbackResult(callback, tabsState.byId[tabId] || tabsState.activeTab);
+      const tab = Object.prototype.hasOwnProperty.call(tabsState.byId, tabId)
+        ? tabsState.byId[tabId]
+        : tabsState.activeTab && tabsState.activeTab.id === tabId
+          ? tabsState.activeTab
+          : tabsState.lastFocusedTab && tabsState.lastFocusedTab.id === tabId
+            ? tabsState.lastFocusedTab
+          : undefined;
+      callbackResult(callback, tab);
     },
     sendMessage(tabId, message, callback) {
       tabsState.sendCalls.push({ tabId, message });
@@ -71,7 +80,7 @@ globalThis.OffscreenCanvas = class {
   }
 };
 
-const { handleMessage, computeCropRect, sendToTab } = require('../background.js');
+const { handleMessage, computeCropRect, sendToTab, isRestrictedUrl } = require('../background.js');
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -101,6 +110,7 @@ async function send(type, fields = {}) {
 
 function resetTabs() {
   tabsState.activeTab = { id: 1, url: 'https://example.com/' };
+  tabsState.lastFocusedTab = null;
   tabsState.byId = Object.create(null);
   tabsState.sendCalls = [];
   tabsState.sendBehavior = null;
@@ -233,6 +243,34 @@ async function test(name, fn) {
      assertEqual(JSON.stringify(crop), JSON.stringify({ sx: 2, sy: 4, sw: 1, sh: 1 }), 'tiny crop');
   });
 
+  await test('isRestrictedUrl allows normal http and https URLs', async () => {
+    assertEqual(isRestrictedUrl('http://example.com/path'), false, 'http URL should be allowed');
+    assertEqual(isRestrictedUrl('https://example.com/path'), false, 'https URL should be allowed');
+  });
+
+  await test('isRestrictedUrl rejects browser-owned pages and the Chrome Web Store', async () => {
+    for (const url of [
+      'chrome://extensions',
+      'chrome-extension://abcdefghijklmnop/options.html',
+      'about:blank',
+      'view-source:https://example.com/',
+      'https://chrome.google.com/webstore/category/extensions',
+      'https://chromewebstore.google.com/',
+    ]) {
+      assertEqual(isRestrictedUrl(url), true, `${url} should be restricted`);
+    }
+  });
+
+  await test('isRestrictedUrl does not match restricted text inside normal paths', async () => {
+    assertEqual(isRestrictedUrl('https://example.com/chrome://extensions'), false, 'chrome text in a path');
+    assertEqual(isRestrictedUrl('https://example.com/about:blank'), false, 'about text in a path');
+  });
+
+  await test('isRestrictedUrl treats empty and undefined URLs as unrestricted', async () => {
+    assertEqual(isRestrictedUrl(''), false, 'empty URL');
+    assertEqual(isRestrictedUrl(undefined), false, 'undefined URL');
+  });
+
   await test('takeScreenshot rejects an invalid rect', async () => {
     configureScreenshot();
     const result = await send(WC.MSG.takeScreenshot, { rect: { x: 0, y: 0, width: 10 }, dpr: 1 });
@@ -272,7 +310,8 @@ async function test(name, fn) {
     tabsState.byId[4] = { id: 4, url: 'chrome://settings/' };
      const result = await sendToTab(4, { type: 'toggle' });
      assertEqual(result.ok, false, 'restricted URL should fail');
-     assertEqual(result.error, 'WebCut cannot run on this page', 'restricted URL error');
+     assertEqual(result.reason, 'restricted', 'restricted URL reason');
+     assertEqual(result.error, 'WebCut cannot run on this kind of page (browser or store page).', 'restricted URL error');
     assertEqual(tabsState.sendCalls.length, 0, 'restricted URL should not send a message');
   });
 
@@ -283,7 +322,45 @@ async function test(name, fn) {
     const result = await sendToTab(undefined, message);
      assertEqual(result.ok, true, 'direct response');
     assertEqual(tabsState.sendCalls.length, 1, 'direct send count');
-     assertEqual(tabsState.sendCalls[0].tabId, 7, 'resolved active tab ID');
+    assertEqual(tabsState.sendCalls[0].tabId, 7, 'resolved active tab ID');
+  });
+
+  await test('sendToTab uses a supplied tabId instead of the active tab', async () => {
+    resetTabs();
+    tabsState.activeTab = { id: 1, url: 'https://example.com/active' };
+    tabsState.byId[7] = { id: 7, url: 'https://example.com/supplied' };
+    const result = await sendToTab(7, { type: 'toggle' });
+    assertEqual(result.ok, true, 'supplied tab response');
+    assertEqual(tabsState.sendCalls.length, 1, 'supplied tab send count');
+    assertEqual(tabsState.sendCalls[0].tabId, 7, 'supplied tab ID');
+  });
+
+  await test('sendToTab uses the lastFocusedWindow tab when no active tab is available', async () => {
+    resetTabs();
+    tabsState.activeTab = null;
+    tabsState.lastFocusedTab = { id: 6, url: 'https://example.com/last-focused' };
+    const result = await sendToTab(undefined, { type: 'toggle' });
+    assertEqual(result.ok, true, 'last focused tab response');
+    assertEqual(tabsState.sendCalls[0].tabId, 6, 'last focused tab ID');
+  });
+
+  await test('handleMessage returns the no-tab reason when no tab can be resolved', async () => {
+    resetTabs();
+    tabsState.activeTab = null;
+    tabsState.lastFocusedTab = null;
+    const result = await send(WC.MSG.toggleToolbar);
+    assertEqual(result.ok, false, 'missing tab should fail');
+    assertEqual(result.reason, 'no-tab', 'no-tab reason code');
+    assertEqual(result.error, 'No active tab was found. Click on a web page and try again.', 'no-tab error');
+  });
+
+  await test('sendToTab returns the url-unknown reason when a tab has no URL', async () => {
+    resetTabs();
+    tabsState.byId[11] = { id: 11 };
+    const result = await sendToTab(11, { type: 'toggle' });
+    assertEqual(result.ok, false, 'unknown URL should fail');
+    assertEqual(result.reason, 'url-unknown', 'url-unknown reason code');
+    assertEqual(result.error, 'This tab is still loading. Wait for the page to finish and try again.', 'url-unknown error');
   });
 
   await test('toggle handlers forward through the background service worker', async () => {
@@ -328,11 +405,40 @@ async function test(name, fn) {
       if (method === 'executeScript') callbackResult(callback, undefined, 'Cannot access contents of the page');
       else callbackResult(callback);
     };
-     const result = await sendToTab(9, { type: 'toggle' });
+    const result = await sendToTab(9, { type: 'toggle' });
      assertEqual(result.ok, false, 'injection failure should fail');
-     assertEqual(result.error, 'Cannot access contents of the page', 'injection failure error');
+      assertEqual(result.reason, 'inject-failed', 'injection failure reason');
+      assertEqual(result.error, 'WebCut could not start on this page: Cannot access contents of the page.', 'injection failure error');
     assertEqual(tabsState.sendCalls.length, 1, 'injection failure should not retry send');
     assertEqual(tabsState.injectionCalls.length, 1, 'injection stops after executeScript failure');
+  });
+
+  await test('handleMessage returns the no-receiver reason after injection retry fails', async () => {
+    resetTabs();
+    tabsState.byId[12] = { id: 12, url: 'https://example.com/no-receiver' };
+    tabsState.sendBehavior = (tabId, message, callback) => {
+      callbackResult(callback, undefined, 'Could not establish connection. Receiving end does not exist.');
+    };
+    const result = await send(WC.MSG.toggleToolbar, { tabId: 12 });
+    assertEqual(result.ok, false, 'no receiver should fail');
+     assertEqual(result.reason, 'no-receiver', 'no-receiver reason code');
+     assertEqual(result.error, 'WebCut did not respond on this page after starting.', 'no-receiver error');
+    assertEqual(tabsState.sendCalls.length, 2, 'no-receiver retry count');
+  });
+
+  await test('handleMessage returns the inject-failed reason', async () => {
+    resetTabs();
+    tabsState.byId[13] = { id: 13, url: 'https://example.com/inject-failed' };
+    tabsState.sendBehavior = (tabId, message, callback) => {
+      callbackResult(callback, undefined, 'The message port closed before a response was received.');
+    };
+    tabsState.injectionBehavior = (method, details, callback) => {
+      callbackResult(callback, undefined, 'Cannot access contents of the page');
+    };
+    const result = await send(WC.MSG.toggleDrawer, { tabId: 13 });
+    assertEqual(result.ok, false, 'injection failure should fail through handleMessage');
+     assertEqual(result.reason, 'inject-failed', 'inject-failed reason code');
+     assertEqual(result.error, 'WebCut could not start on this page: Cannot access contents of the page.', 'inject-failed error');
   });
 
   const passed = cases.filter((item) => item.passed).length;

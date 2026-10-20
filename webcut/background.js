@@ -648,30 +648,40 @@ async function takeScreenshot(message, sender) {
 }
 
 function restrictedUrl(url) {
+  return isRestrictedUrl(url);
+}
+
+function isRestrictedUrl(urlString) {
+  if (typeof urlString !== 'string' || urlString.trim() === '') return false;
+
   let parsed;
   try {
-    parsed = new URL(url);
+    parsed = new URL(urlString);
   } catch (error) {
-    return true;
+    const scheme = /^([a-z][a-z\d+.-]*):/i.exec(urlString.trim());
+    return Boolean(scheme && scheme[1].toLowerCase() !== 'http' && scheme[1].toLowerCase() !== 'https');
   }
+
   if (RESTRICTED_SCHEMES.has(parsed.protocol)) return true;
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return true;
   const host = parsed.hostname.toLowerCase();
-  if (host === 'chrome.google.com' && parsed.pathname.toLowerCase().startsWith('/webstore')) return true;
-  if (host === 'chromewebstore.google.com') return true;
-  if (host === 'microsoftedge.microsoft.com' && parsed.pathname.toLowerCase().startsWith('/addons')) return true;
-  if (host === 'addons.mozilla.org' || host === 'addons.opera.com') return true;
-  return false;
+  return (host === 'chrome.google.com' && parsed.pathname.toLowerCase().startsWith('/webstore'))
+    || host === 'chromewebstore.google.com';
 }
 
 async function resolveTabId(tabId) {
   if (tabId !== undefined && tabId !== null) {
-    if (!Number.isInteger(tabId)) throw new Error('tabId must be an integer');
+    if (!Number.isInteger(tabId)) throw new Error('No active tab was found. Click on a web page and try again.');
     return tabId;
   }
-  const tabs = await chromeCall(chrome.tabs, 'query', [{ active: true, currentWindow: true }]);
+  let tabs;
+  try {
+    tabs = await chromeCall(chrome.tabs, 'query', [{ active: true, lastFocusedWindow: true }]);
+  } catch (error) {
+    throw new Error('No active tab was found. Click on a web page and try again.');
+  }
   const tab = Array.isArray(tabs) ? tabs[0] : null;
-  if (!tab || !Number.isInteger(tab.id)) throw new Error('Active tab not found');
+  if (!tab || !Number.isInteger(tab.id)) throw new Error('No active tab was found. Click on a web page and try again.');
   return tab.id;
 }
 
@@ -690,22 +700,51 @@ async function injectContent(tabId) {
 
 async function sendToTab(tabId, message) {
   try {
-    if (typeof chrome === 'undefined' || !chrome.tabs) throw new Error('chrome.tabs is unavailable');
+    if (typeof chrome === 'undefined' || !chrome.tabs) {
+      return { ok: false, reason: 'no-tab', error: 'No active tab was found. Click on a web page and try again.' };
+    }
     const resolvedTabId = await resolveTabId(tabId);
-    const tabs = await chromeCall(chrome.tabs, 'get', [resolvedTabId]);
-    if (!tabs || restrictedUrl(tabs.url)) throw new Error('WebCut cannot run on this page');
+    let tabs;
+    try {
+      tabs = await chromeCall(chrome.tabs, 'get', [resolvedTabId]);
+    } catch (error) {
+      return { ok: false, reason: 'no-tab', error: 'No active tab was found. Click on a web page and try again.' };
+    }
+    if (!tabs) return { ok: false, reason: 'no-tab', error: 'No active tab was found. Click on a web page and try again.' };
+    if (typeof tabs.url !== 'string' || tabs.url.trim() === '') {
+      return { ok: false, reason: 'url-unknown', error: 'This tab is still loading. Wait for the page to finish and try again.' };
+    }
+    if (restrictedUrl(tabs.url)) {
+      return { ok: false, reason: 'restricted', error: 'WebCut cannot run on this kind of page (browser or store page).' };
+    }
     let response;
     try {
       response = await chromeCall(chrome.tabs, 'sendMessage', [resolvedTabId, message]);
     } catch (error) {
-      if (!missingReceiver(error)) throw error;
-      await injectContent(resolvedTabId);
-      response = await chromeCall(chrome.tabs, 'sendMessage', [resolvedTabId, message]);
+      if (!missingReceiver(error)) {
+        return { ok: false, reason: 'inject-failed', error: `WebCut could not start on this page: ${error.message || 'message delivery failed'}.` };
+      }
+      try {
+        await injectContent(resolvedTabId);
+      } catch (injectionError) {
+        return { ok: false, reason: 'inject-failed', error: `WebCut could not start on this page: ${injectionError.message || 'injection failed'}.` };
+      }
+      try {
+        response = await chromeCall(chrome.tabs, 'sendMessage', [resolvedTabId, message]);
+      } catch (retryError) {
+        if (missingReceiver(retryError)) {
+          return { ok: false, reason: 'no-receiver', error: 'WebCut did not respond on this page after starting.' };
+        }
+        return { ok: false, reason: 'inject-failed', error: `WebCut could not start on this page: ${retryError.message || 'message delivery failed'}.` };
+      }
     }
-    if (response && typeof response === 'object' && response.ok === false) return response;
+    if (response && typeof response === 'object') return { ok: true, ...response };
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error && error.message ? error.message : String(error) };
+    if (error && error.message === 'No active tab was found. Click on a web page and try again.') {
+      return { ok: false, reason: 'no-tab', error: error.message };
+    }
+    return { ok: false, reason: 'inject-failed', error: `WebCut could not start on this page: ${error && error.message ? error.message : String(error)}.` };
   }
 }
 
@@ -753,4 +792,4 @@ if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.onMessage 
   });
 }
 
-if (typeof module !== 'undefined') module.exports = { handleMessage, computeCropRect, sendToTab };
+if (typeof module !== 'undefined') module.exports = { handleMessage, computeCropRect, sendToTab, isRestrictedUrl };
