@@ -117,6 +117,7 @@
     setStatus('', 'info');
   });
   componentButton.addEventListener('click', function () {
+    closePreviewBeforeNewAction();
     if (toolbarState.startSelecting()) {
       beginSelection();
       setStatus('Select mode: hover an element, use the up/down arrows to change it, click or press Enter to confirm, Escape to cancel.', 'info');
@@ -149,6 +150,7 @@
         sendResponse({ ok: true, visible: true, busy: true });
         return false;
       }
+      closePreviewBeforeNewAction();
       if (message.action === 'page') {
         startExport('page', null);
       } else if (message.action === 'component' && toolbarState.startSelecting()) {
@@ -323,6 +325,7 @@
   }
 
   function startExport(mode, element) {
+    closePreviewBeforeNewAction();
     if (!toolbarState.startExport()) return false;
     cleanupSelection();
     updateButtons();
@@ -574,6 +577,10 @@
     var restore = previewRestoreFocus;
     previewRestoreFocus = null;
     if (restore && typeof restore.focus === 'function') restore.focus();
+  }
+
+  function closePreviewBeforeNewAction() {
+    if (previewModal) closePreviewModal();
   }
 
   function downloadLastCapture() {
