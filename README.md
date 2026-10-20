@@ -100,11 +100,11 @@ Chrome browser pages and Chrome Web Store pages cannot be captured.
 
 Before getting started, ensure you have the following installed:
 
-- **[Node.js](https://nodejs.org/)** `>=20`
+- **[Node.js](https://nodejs.org/)** `24.20.0`
 - **npm**, included with Node.js
 - **Git**, to clone the repository
 
-> **Note:** The repository pins Node.js version `24.20.0` in the `.nvmrc` file. Using the specified version is recommended for a consistent development environment.
+> **Note:** The repository pins Node.js version `24.20.0` in `.nvmrc`, `package.json`, and the Dockerfile.
 
 ### Installation
 
@@ -121,6 +121,17 @@ Before getting started, ensure you have the following installed:
    npm ci
    ```
 
+### Running the extension
+
+WebCut is a Chrome extension, so it runs by loading the repository's `webcut/` directory as an unpacked extension:
+
+1. Open `chrome://extensions` in Chrome.
+2. Enable **Developer mode**.
+3. Click **Load unpacked**.
+4. Select the `webcut/` directory.
+
+There is no local web server or separate application process to start.
+
 ### Running Tests
 
 Run the test suite to verify that the project is working correctly:
@@ -135,6 +146,15 @@ Check the JavaScript files for syntax errors:
 
 ```bash
 npm run check
+```
+
+### Running the rebuild check in Docker
+
+The Dockerfile uses the pinned Node.js runtime, installs from `package-lock.json`, checks JavaScript syntax during the image build, and runs the test suite when the container starts:
+
+```bash
+docker build -t webcut .
+docker run --rm webcut
 ```
 
 ### Development Notes

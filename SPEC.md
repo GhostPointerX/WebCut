@@ -102,7 +102,7 @@ The background creates and protects a `default` folder. Folder writes and page w
 ## Build and test
 
 - `package.json` contains no runtime or development dependencies. `package-lock.json` records the empty dependency graph.
-- `.nvmrc` pins Node 24.20.0. The Dockerfile uses the matching `node:24-slim` major image.
+- `.nvmrc`, `package.json`, and the Dockerfile pin Node 24.20.0.
 - `npm ci` installs from the lockfile on a clean checkout.
 - `npm test` runs `scripts/run-tests.js`, which discovers every `*.test.js` file under `webcut/test` and runs it with the current Node executable.
 - `npm run check` runs `scripts/check-syntax.js`, which checks project JavaScript while skipping `.git`, `node_modules`, and `.opencode`.

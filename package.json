@@ -5,7 +5,7 @@
   "license": "MIT",
   "description": "A plain JavaScript Chrome extension that saves rendered web page snapshots locally.",
   "engines": {
-    "node": ">=20"
+    "node": "24.20.0"
   },
   "scripts": {
     "test": "node scripts/run-tests.js",
