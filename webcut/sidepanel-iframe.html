@@ -39,9 +39,21 @@
         <button id="recent-toggle" class="text-button" type="button">Show all recent</button>
       </section>
 
-      <!-- Filled in step 10B. -->
-      <section id="folders-area" class="folders-area" aria-label="Folders">
-        <p>Folders coming soon</p>
+      <section id="folders-area" class="folders-area" aria-labelledby="folders-heading" hidden>
+        <div class="section-heading">
+          <h2 id="folders-heading">Folders</h2>
+          <button id="new-folder-button" class="text-button" type="button">+ New folder</button>
+        </div>
+        <form id="new-folder-form" class="folder-form" hidden>
+          <label class="sr-only" for="new-folder-input">Folder name</label>
+          <input id="new-folder-input" type="text" maxlength="40" placeholder="Folder name" autocomplete="off">
+          <div class="folder-form-actions">
+            <button id="create-folder" class="action-button action-button-primary" type="submit">Create</button>
+            <button id="cancel-new-folder" class="action-button" type="button">Cancel</button>
+          </div>
+          <p id="new-folder-error" class="field-error" role="alert" hidden></p>
+        </form>
+        <div id="folder-list" class="folder-grid"></div>
       </section>
 
       <section id="results-section" class="content-section" aria-labelledby="results-heading" hidden>
@@ -58,6 +70,30 @@
         </div>
         <p id="preview-status" class="status">Loading preview…</p>
         <div id="preview-frame-wrap" class="preview-frame-wrap"></div>
+      </section>
+
+      <section id="folder-view" class="folder-view" hidden aria-labelledby="folder-view-heading">
+        <div class="folder-view-header">
+          <button id="folder-back" class="text-button" type="button">← Back</button>
+          <h2 id="folder-view-heading">Folder</h2>
+        </div>
+        <div class="folder-view-actions">
+          <button id="add-to-folder" class="button-primary" type="button">+ Add</button>
+        </div>
+        <div id="folder-picker" class="folder-picker" hidden>
+          <div class="section-heading">
+            <h3 id="folder-picker-heading">Add to folder</h3>
+            <button id="folder-picker-done" class="text-button" type="button">Done</button>
+          </div>
+          <p id="folder-picker-status" class="status" role="status" aria-live="polite"></p>
+          <div id="folder-picker-list" class="item-list"></div>
+        </div>
+        <p id="folder-status" class="status" role="status" aria-live="polite"></p>
+        <div id="folder-empty" class="empty-state" hidden>
+          <h3>This folder is empty</h3>
+          <p>Use + Add to place a saved capture here.</p>
+        </div>
+        <div id="folder-items" class="item-list"></div>
       </section>
     </main>
     <script src="shared/messages.js"></script>

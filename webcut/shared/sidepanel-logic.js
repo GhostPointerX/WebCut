@@ -101,12 +101,77 @@
     }
   }
 
+  function folderCounts(folders, pages) {
+    var pageIds = Object.create(null);
+    pageList(pages).forEach(function (page) {
+      pageIds[page.id] = true;
+    });
+    var counts = {};
+    if (!Array.isArray(folders)) return counts;
+    folders.forEach(function (folder) {
+      if (!folder || typeof folder !== 'object' || Array.isArray(folder)
+        || typeof folder.id !== 'string' || !Array.isArray(folder.itemIds)) return;
+      var seen = Object.create(null);
+      counts[folder.id] = folder.itemIds.filter(function (pageId) {
+        if (typeof pageId !== 'string' || !pageIds[pageId] || seen[pageId]) return false;
+        seen[pageId] = true;
+        return true;
+      }).length;
+    });
+    return counts;
+  }
+
+  function itemsInFolder(folder, pages) {
+    if (!folder || typeof folder !== 'object' || !Array.isArray(folder.itemIds)) return [];
+    var ids = Object.create(null);
+    folder.itemIds.forEach(function (pageId) {
+      if (typeof pageId === 'string') ids[pageId] = true;
+    });
+    return pageList(pages).filter(function (page) {
+      return ids[page.id];
+    });
+  }
+
+  function foldersForPage(folders, pageId) {
+    if (!Array.isArray(folders) || typeof pageId !== 'string') return [];
+    return folders.filter(function (folder) {
+      return folder && typeof folder === 'object' && Array.isArray(folder.itemIds)
+        && folder.itemIds.indexOf(pageId) !== -1;
+    }).map(function (folder) {
+      return folder.id;
+    }).filter(function (folderId) {
+      return typeof folderId === 'string' && folderId !== '';
+    });
+  }
+
+  function validateFolderName(name, folders, ignoreId) {
+    if (typeof name !== 'string') return { ok: false, error: 'Folder name is required.' };
+    var trimmed = name.trim();
+    if (trimmed.length < 1 || trimmed.length > 40) {
+      return { ok: false, error: 'Folder name must be 1-40 characters.' };
+    }
+    var normalized = trimmed.toLocaleLowerCase();
+    if (Array.isArray(folders) && folders.some(function (folder) {
+      return folder && typeof folder === 'object'
+        && (ignoreId === undefined || String(folder.id) !== String(ignoreId))
+        && typeof folder.name === 'string'
+        && folder.name.trim().toLocaleLowerCase() === normalized;
+    })) {
+      return { ok: false, error: 'A folder with that name already exists.' };
+    }
+    return { ok: true, name: trimmed };
+  }
+
   var API = {
     filterPages: filterPages,
     pickRecent: pickRecent,
     groupByDate: groupByDate,
     relativeTime: relativeTime,
-    siteName: siteName
+    siteName: siteName,
+    folderCounts: folderCounts,
+    itemsInFolder: itemsInFolder,
+    foldersForPage: foldersForPage,
+    validateFolderName: validateFolderName
   };
 
   if (root) root.WebCutSidepanelLogic = API;

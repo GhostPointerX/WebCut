@@ -6,6 +6,10 @@ const {
   groupByDate,
   relativeTime,
   siteName,
+  folderCounts,
+  itemsInFolder,
+  foldersForPage,
+  validateFolderName,
 } = require('../shared/sidepanel-logic.js');
 
 function assert(condition, message) {
@@ -112,6 +116,47 @@ test('siteName removes www and keeps subdomains', () => {
   assertEqual(siteName('https://www.example.com/path'), 'example.com', 'www removal');
   assertEqual(siteName('https://app.example.com/path'), 'app.example.com', 'subdomain');
   assertEqual(siteName('not a URL'), '', 'invalid URL');
+});
+
+test('folderCounts ignores missing page ids and counts empty folders', () => {
+  const folders = [
+    { id: 'default', name: 'Default', itemIds: ['alpha', 'missing', 'alpha'] },
+    { id: 'empty', name: 'Empty', itemIds: [] },
+  ];
+  assertDeepEqual(folderCounts(folders, pages), { default: 1, empty: 0 }, 'folder counts');
+});
+
+test('itemsInFolder follows page order and ignores missing ids', () => {
+  const folder = { id: 'folder', itemIds: ['component-card', 'missing', 'alpha'] };
+  assertDeepEqual(itemsInFolder(folder, pages).map((item) => item.id), ['alpha', 'component-card'], 'folder items');
+});
+
+test('foldersForPage returns containing folder ids', () => {
+  const folders = [
+    { id: 'one', itemIds: ['alpha'] },
+    { id: 'two', itemIds: ['beta', 'alpha'] },
+    { id: 'empty', itemIds: [] },
+  ];
+  assertDeepEqual(foldersForPage(folders, 'alpha'), ['one', 'two'], 'containing folders');
+});
+
+test('validateFolderName rejects empty and overlong names', () => {
+  assertEqual(validateFolderName('   ', [], undefined).ok, false, 'empty folder name');
+  assertEqual(validateFolderName('x'.repeat(41), [], undefined).ok, false, 'long folder name');
+});
+
+test('validateFolderName rejects duplicate names regardless of case', () => {
+  const result = validateFolderName('design', [{ id: 'one', name: 'Design', itemIds: [] }], undefined);
+  assertEqual(result.ok, false, 'duplicate folder name');
+});
+
+test('validateFolderName allows renaming a folder to its own name', () => {
+  const result = validateFolderName(' Design ', [{ id: 'one', name: 'Design', itemIds: [] }], 'one');
+  assertDeepEqual(result, { ok: true, name: 'Design' }, 'same folder rename');
+});
+
+test('validateFolderName accepts a valid unique name', () => {
+  assertDeepEqual(validateFolderName('  Archive  ', [], undefined), { ok: true, name: 'Archive' }, 'valid folder name');
 });
 
 const passed = cases.filter((item) => item.passed).length;

@@ -315,6 +315,10 @@ h2 {
   color: var(--accent-strong);
 }
 
+.section-heading .text-button {
+  margin: 0;
+}
+
 .action-button-danger {
   border-color: #70444d;
   color: var(--danger);
@@ -347,6 +351,33 @@ h2 {
   gap: 6px;
 }
 
+.folder-chooser {
+  display: grid;
+  gap: 7px;
+  grid-column: 1 / -1;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.folder-chooser > span:first-child {
+  color: var(--muted-strong);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.folder-chooser-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.folder-chooser-list .action-button {
+  min-height: 28px;
+  font-size: 10px;
+}
+
 .group-heading {
   margin: 18px 0 0;
   color: var(--muted);
@@ -364,6 +395,286 @@ h2 {
   margin: 0;
   color: #7f899e;
   font-size: 12px;
+}
+
+.folder-form {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.folder-form input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: var(--panel-soft);
+  color: var(--ink);
+}
+
+.folder-form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.action-button-primary,
+.button-primary {
+  color: #102120;
+  background: var(--accent-strong);
+  border-color: var(--accent);
+}
+
+.field-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 11px;
+}
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px;
+  margin-top: 11px;
+}
+
+.folder-tile {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-width: 0;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--ink);
+  text-align: center;
+}
+
+.folder-tile-open {
+  display: grid;
+  justify-items: center;
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.folder-tile-open:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 7px;
+}
+
+.folder-tile:not(.folder-tile-default) {
+  cursor: pointer;
+}
+
+.folder-tile:hover {
+  border-color: var(--accent);
+  background: var(--panel-raised);
+}
+
+.folder-tile:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.folder-icon {
+  width: 34px;
+  height: 30px;
+  margin-bottom: 5px;
+  color: var(--accent);
+}
+
+.folder-name {
+  width: 100%;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count {
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.folder-menu-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 24px;
+  height: 24px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.folder-menu-button:hover {
+  border-color: var(--line);
+  background: var(--panel-raised);
+  color: var(--ink);
+}
+
+.folder-menu {
+  position: absolute;
+  top: 31px;
+  right: 4px;
+  z-index: 2;
+  display: grid;
+  min-width: 92px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-raised);
+  box-shadow: var(--shadow);
+}
+
+.folder-menu button {
+  border: 0;
+  border-radius: 5px;
+  padding: 6px 7px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 11px;
+  text-align: left;
+}
+
+.folder-menu button:hover {
+  background: rgb(255 255 255 / 8%);
+  color: var(--ink);
+}
+
+.folder-inline-form,
+.folder-delete-confirm {
+  display: grid;
+  gap: 7px;
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.folder-inline-form input {
+  width: 100%;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 5px 7px;
+  background: var(--panel-soft);
+  color: var(--ink);
+  font-size: 11px;
+}
+
+.folder-delete-confirm p {
+  margin: 0;
+  color: var(--danger);
+  font-size: 11px;
+  text-align: left;
+}
+
+.folder-view {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.folder-view-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.folder-view-header .text-button {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.folder-view-header h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-view-actions {
+  display: flex;
+}
+
+.folder-view-actions .button-primary {
+  min-height: 38px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  padding: 8px 13px;
+  font-weight: 800;
+}
+
+.folder-picker {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.folder-picker h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.folder-picker .text-button {
+  margin: 0;
+}
+
+.folder-picker-card {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.folder-picker-card .thumbnail {
+  min-height: 36px;
+  aspect-ratio: 1.4;
+}
+
+.folder-picker-card .card-title {
+  font-size: 11px;
+}
+
+.folder-picker-card .action-button {
+  min-width: 48px;
+}
+
+.added-label {
+  color: var(--accent-strong);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .empty-state {
@@ -433,6 +744,20 @@ h2 {
 
   .capture-card {
     grid-template-columns: 70px minmax(0, 1fr);
+  }
+
+  .folder-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .folder-picker-card {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .folder-picker-card .action-button,
+  .folder-picker-card .added-label {
+    grid-column: 1 / -1;
+    justify-self: start;
   }
 }
 
