@@ -9,9 +9,12 @@
   <body>
     <main class="app-shell">
       <header class="app-header">
-        <div>
+        <div class="brand-lockup">
+          <img class="brand-logo" src="icons/icon-48.png" alt="WebCut logo">
+          <div>
           <p class="eyebrow">SAVED CAPTURES</p>
           <h1>WebCut</h1>
+          </div>
         </div>
         <span id="saved-count" class="saved-count">0 saved</span>
       </header>
@@ -68,7 +71,7 @@
           <button id="preview-back" class="text-button" type="button">← Back</button>
           <h2 id="preview-heading">Preview</h2>
         </div>
-        <p id="preview-status" class="status">Loading preview…</p>
+        <p id="preview-status" class="status" hidden></p>
         <div id="preview-frame-wrap" class="preview-frame-wrap"></div>
       </section>
 

@@ -71,6 +71,23 @@
   margin-bottom: 14px;
 }
 
+.toolbar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--webcut-space);
+  min-width: 0;
+}
+
+.toolbar-logo {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  border: 1px solid var(--webcut-border);
+  border-radius: 6px;
+  background: var(--webcut-panel);
+}
+
 h1 {
   margin: 0;
   color: var(--webcut-text);
@@ -196,11 +213,28 @@ h1 {
   gap: 8px;
 }
 
-.preview-modal-icon {
+.preview-modal-brand {
+  display: flex;
+  align-items: center;
   flex: 0 0 auto;
-  color: var(--webcut-accent);
-  font-size: 18px;
-  line-height: 1;
+  gap: 8px;
+}
+
+.preview-modal-logo {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  border: 1px solid var(--webcut-border);
+  border-radius: 7px;
+  background: var(--webcut-panel);
+}
+
+.preview-modal-brand-name {
+  color: var(--webcut-text);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .preview-modal-title,

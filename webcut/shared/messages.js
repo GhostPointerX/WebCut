@@ -46,6 +46,7 @@ var KEYS = {
   content: 'local:page-content:',
   screenshot: 'local:screenshot-data:',
   settings: 'local:user-settings',
+  extensionDisabled: 'local:extension-disabled',
   folders: 'local:folders',
   contentKey: function (id) {
     return 'local:page-content:' + String(id);

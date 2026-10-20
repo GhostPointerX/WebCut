@@ -11,7 +11,6 @@
   }
   var shadow = host.shadowRoot || host.attachShadow({ mode: 'open' });
   if (shadow.querySelector('.toolbar')) {
-    host.hidden = false;
     return;
   }
   host.hidden = true;
@@ -61,9 +60,17 @@
 
   var header = document.createElement('div');
   header.className = 'toolbar-header';
+  var brand = document.createElement('div');
+  brand.className = 'toolbar-brand';
+  var logo = document.createElement('img');
+  logo.className = 'toolbar-logo';
+  logo.src = chrome.runtime.getURL('icons/icon-48.png');
+  logo.alt = 'WebCut logo';
   var title = document.createElement('h1');
   title.textContent = 'WebCut';
-  header.appendChild(title);
+  brand.appendChild(logo);
+  brand.appendChild(title);
+  header.appendChild(brand);
   var closeButton = createButton('close', '×', 'Close WebCut toolbar');
   header.appendChild(closeButton);
 
@@ -395,17 +402,24 @@
     header.className = 'preview-modal-header';
     var heading = document.createElement('div');
     heading.className = 'preview-modal-heading';
-    var icon = document.createElement('span');
-    icon.className = 'preview-modal-icon';
-    icon.setAttribute('aria-hidden', 'true');
-    icon.textContent = '⇩';
+    var brand = document.createElement('div');
+    brand.className = 'preview-modal-brand';
+    var logo = document.createElement('img');
+    logo.className = 'preview-modal-logo';
+    logo.src = chrome.runtime.getURL('icons/icon-48.png');
+    logo.alt = 'WebCut logo';
+    var brandName = document.createElement('span');
+    brandName.className = 'preview-modal-brand-name';
+    brandName.textContent = 'WebCut';
     var headingText = document.createElement('h2');
     headingText.id = 'webcut-preview-title';
     headingText.className = 'preview-modal-title';
     headingText.textContent = cloneLogic && typeof cloneLogic.previewTitle === 'function'
       ? cloneLogic.previewTitle(lastCapture.title, lastCapture.type)
       : (lastCapture.title || 'Untitled') + ' (' + (lastCapture.type || 'page') + ')';
-    heading.appendChild(icon);
+    brand.appendChild(logo);
+    brand.appendChild(brandName);
+    heading.appendChild(brand);
     heading.appendChild(headingText);
     var closeButton = createModalButton('×', 'preview-modal-close', 'Close preview');
     header.appendChild(heading);
@@ -1529,6 +1543,47 @@
     status.dataset.level = level || 'info';
   }
 
+  function setExtensionDisabled(disabled) {
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local
+      || typeof chrome.storage.local.set !== 'function') {
+      console.error('WebCut activation storage is unavailable.');
+      return;
+    }
+    var values = {};
+    values[extensionDisabledKey] = disabled === true;
+    chrome.storage.local.set(values, function () {
+      var lastError = chrome.runtime && chrome.runtime.lastError;
+      if (lastError) console.error('WebCut could not save activation state:', lastError.message || String(lastError));
+    });
+  }
+
+  function activateExtension() {
+    manuallyActivated = true;
+    setExtensionDisabled(false);
+  }
+
+  function showToolbarWhenEnabled(onEnabled) {
+    if (manuallyActivated) {
+      onEnabled();
+      return;
+    }
+    if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local
+      || typeof chrome.storage.local.get !== 'function') {
+      onEnabled();
+      return;
+    }
+    chrome.storage.local.get([extensionDisabledKey], function (values) {
+      var lastError = chrome.runtime && chrome.runtime.lastError;
+      if (manuallyActivated) return;
+      if (lastError) {
+        console.error('WebCut could not read activation state:', lastError.message || String(lastError));
+        return;
+      }
+      if (values && values[extensionDisabledKey] === true) return;
+      onEnabled();
+    });
+  }
+
   function showToolbar() {
     host.hidden = false;
     setStatus(statusDefault, 'info');
@@ -1539,7 +1594,9 @@
     host.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;overflow:visible;z-index:2147483647;pointer-events:none;font:14px/1.4 system-ui,sans-serif;color:#fff;';
     toolbar.style.cssText = 'display:block;position:fixed;top:8px;left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 16px);box-sizing:border-box;padding:16px;pointer-events:auto;overflow:visible;background:#171a24;border:1px solid #3b4255;border-radius:12px;box-shadow:0 18px 50px rgb(0 0 0 / 34%);';
     setStatus('WebCut styles could not load. Using fallback styles.', 'error');
-    host.hidden = false;
+    showToolbarWhenEnabled(function () {
+      host.hidden = false;
+    });
   }
 
   function createFallbackState() {

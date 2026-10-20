@@ -90,11 +90,10 @@ h1 {
   width: 34px;
   height: 34px;
   place-items: center;
+  object-fit: contain;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-strong);
-  color: var(--accent-strong);
-  font-weight: 900;
 }
 
 .stats {

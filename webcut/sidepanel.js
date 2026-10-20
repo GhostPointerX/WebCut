@@ -585,24 +585,24 @@
       ? page.title
       : 'Preview';
     clearNode(elements.previewFrameWrap);
+    elements.previewStatus.hidden = true;
+    elements.previewFrameWrap.hidden = true;
     if (state.previewLoading) {
-      elements.previewStatus.textContent = 'Loading preview…';
-      elements.previewStatus.dataset.level = 'info';
       return;
     }
     if (state.previewError) {
       elements.previewStatus.textContent = state.previewError;
       elements.previewStatus.dataset.level = 'error';
+      elements.previewStatus.hidden = false;
       return;
     }
-    elements.previewStatus.textContent = 'Preview';
-    elements.previewStatus.dataset.level = 'info';
     var frame = document.createElement('iframe');
     frame.className = 'preview-frame';
     frame.title = 'Saved capture preview';
     frame.setAttribute('sandbox', '');
     frame.srcdoc = state.previewHtml;
     elements.previewFrameWrap.appendChild(frame);
+    elements.previewFrameWrap.hidden = false;
   }
 
   function renderList(scrollTop) {

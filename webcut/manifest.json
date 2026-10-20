@@ -50,7 +50,8 @@
         "sidepanel-iframe.html",
         "content.css",
         "preview-frame.html",
-        "preview-frame.js"
+        "preview-frame.js",
+        "icons/icon-48.png"
       ],
       "matches": [
         "<all_urls>"
