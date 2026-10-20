@@ -25,6 +25,7 @@
   var toolbar;
   var status;
   var statusDefault = 'Ready.';
+  var lastCapture = { id: null, fileName: '', bytes: 0, type: '' };
   var selectionLogic = typeof WebCutSelectionLogic !== 'undefined'
     ? WebCutSelectionLogic
     : (typeof window !== 'undefined' ? window.WebCutSelectionLogic : null);
@@ -228,13 +229,43 @@
       try {
         setStatus(mode === 'page' ? 'Scrolling…' : 'Collecting styles…', 'info');
         var capture = await captureParts(mode, element);
-        var htmlKb = Math.ceil(byteLength(capture.html) / 1024);
-        var cssKb = Math.ceil(byteLength(capture.css) / 1024);
+        setStatus('Taking screenshot', 'info');
+        var screenshot = await captureScreenshot(mode, element, capture.stats);
+        var fileName = cloneLogic && typeof cloneLogic.buildFileName === 'function'
+          ? cloneLogic.buildFileName(location.href)
+          : 'WebCut-page.html';
+        var saveResponse = await sendRuntimeMessage({
+          type: messageTypes.savePage,
+          meta: {
+            type: mode,
+            url: location.href,
+            title: document.title,
+            savedAt: Date.now(),
+            fileName: fileName,
+          },
+          html: capture.html,
+          screenshot: screenshot || undefined,
+        });
+        if (!saveResponse || saveResponse.ok === false) {
+          throw new Error(saveResponse && saveResponse.error ? saveResponse.error : 'Save failed');
+        }
+        lastCapture = {
+          id: saveResponse.id || null,
+          fileName: fileName,
+          bytes: byteLength(capture.html),
+          type: mode,
+        };
+        var formatBytes = cloneLogic && typeof cloneLogic.formatBytes === 'function'
+          ? cloneLogic.formatBytes
+          : function (value) { return value + ' B'; };
+        var warningText = capture.stats.warningLevel && capture.stats.warningLevel !== 'none'
+          ? ' Warning: ' + capture.stats.warningLevel + '.'
+          : '';
         setStatus(
-          'Captured ' + htmlKb + ' KB HTML, ' + cssKb + ' KB CSS, '
-            + capture.stats.sheetsOk + ' sheets ok, ' + capture.stats.sheetsFailed
-            + ' failed. Saving comes in the next step.',
-          'success',
+          'Saved ' + fileName + ' (' + formatBytes(lastCapture.bytes) + '). '
+            + capture.stats.imagesInlined + ' images inlined, ' + capture.stats.imagesKept
+            + ' kept as links.' + warningText,
+          capture.stats.warningLevel && capture.stats.warningLevel !== 'none' ? 'warning' : 'success',
         );
       } catch (error) {
         setStatus('Capture failed: ' + (error && error.message ? error.message : String(error)), 'error');
@@ -261,6 +292,224 @@
     return new Promise(function (resolve) {
       window.setTimeout(resolve, milliseconds);
     });
+  }
+
+  function waitAnimationFrames(count) {
+    var remaining = Math.max(0, Number(count) || 0);
+    return new Promise(function (resolve) {
+      function next() {
+        if (!remaining) {
+          resolve();
+          return;
+        }
+        remaining -= 1;
+        requestAnimationFrameSafe(next);
+      }
+      next();
+    });
+  }
+
+  function dataUrlBytes(value) {
+    if (typeof value !== 'string' || value.indexOf('data:') !== 0) return 0;
+    var comma = value.indexOf(',');
+    if (comma === -1) return 0;
+    var payload = value.slice(comma + 1);
+    if (/;base64/i.test(value.slice(0, comma))) return Math.floor(payload.replace(/\s/g, '').length * 3 / 4);
+    try {
+      return byteLength(decodeURIComponent(payload));
+    } catch (error) {
+      return byteLength(payload);
+    }
+  }
+
+  function resourceIsFont(url) {
+    return /\.(?:woff2?|ttf|otf|eot)(?:[?#]|$)/i.test(String(url || ''));
+  }
+
+  function makeResourceStats(cssStats) {
+    var sheetsFailed = cssStats.sheetsFailed;
+    return {
+      sheetsOk: cssStats.sheetsOk,
+      sheetsFailed: sheetsFailed,
+      failedUrls: cssStats.failedUrls,
+      cssBytes: cssStats.cssBytes,
+      inlined: 0,
+      kept: 0,
+      imagesInlined: 0,
+      imagesKept: 0,
+      failed: sheetsFailed,
+      inlineBytes: 0,
+      warnings: sheetsFailed ? ['Stylesheet collection failed'] : [],
+      warningLevel: sheetsFailed ? 'warning' : 'none',
+    };
+  }
+
+  function addWarning(stats, message, url) {
+    stats.failed += 1;
+    stats.warningLevel = 'warning';
+    var value = message + (url ? ' (' + url + ')' : '');
+    if (stats.warnings.indexOf(value) === -1 && stats.warnings.length < 20) stats.warnings.push(value);
+    if (url) addFailedUrl(stats, url);
+  }
+
+  function createResourceManager(stats) {
+    var cache = new Map();
+    var accounted = new Set();
+    var active = 0;
+    var queue = [];
+
+    function pump() {
+      while (active < 6 && queue.length) {
+        var item = queue.shift();
+        active += 1;
+        fetchResource(item.url).then(function (result) {
+          item.resolve(result);
+        }, function (error) {
+          item.resolve({ ok: false, error: error && error.message ? error.message : String(error) });
+        }).finally(function () {
+          active -= 1;
+          pump();
+        });
+      }
+    }
+
+    function fetchResource(url) {
+      return sendRuntimeMessage({
+        type: messageTypes.fetchResource,
+        url: url,
+        as: 'dataUrl',
+      }).then(function (response) {
+        if (!response || response.ok === false || typeof response.dataUrl !== 'string') {
+          return { ok: false, error: response && response.error ? response.error : 'Resource fetch failed' };
+        }
+        return { ok: true, dataUrl: response.dataUrl, bytes: dataUrlBytes(response.dataUrl) };
+      });
+    }
+
+    function request(url, kind) {
+      if (!isHttpUrl(url)) return Promise.resolve({ ok: false, keep: true, error: 'Resource URL is not fetchable' });
+      var font = kind === 'font' || resourceIsFont(url);
+      var image = kind === 'media' || kind === 'canvas' || kind === 'css-image';
+      var fetched = cache.get(url);
+      if (!fetched) {
+        fetched = new Promise(function (resolve) {
+          queue.push({ url: url, resolve: resolve });
+          pump();
+        });
+        cache.set(url, fetched);
+      }
+      return fetched.then(function (result) {
+        if (!result.ok) {
+          stats.kept += 1;
+          if (image) stats.imagesKept += 1;
+          addWarning(stats, result.error || 'Resource fetch failed', url);
+          return { ok: false, keep: true };
+        }
+        var limit = font ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+        if (result.bytes > limit) {
+          stats.kept += 1;
+          if (image) stats.imagesKept += 1;
+          addWarning(stats, font ? 'Font exceeds 3 MB' : 'Resource exceeds 5 MB', url);
+          return { ok: false, keep: true };
+        }
+        if (!accounted.has(url)) {
+          if (stats.inlineBytes + result.bytes > 40 * 1024 * 1024) {
+            stats.kept += 1;
+            if (image) stats.imagesKept += 1;
+            addWarning(stats, 'Inline budget exceeded', url);
+            return { ok: false, keep: true };
+          }
+          accounted.add(url);
+          stats.inlineBytes += result.bytes;
+        }
+        stats.inlined += 1;
+        if (image) stats.imagesInlined += 1;
+        return { ok: true, dataUrl: result.dataUrl };
+      });
+    }
+
+    function acceptDataUrl(dataUrl, key, kind) {
+      var bytes = dataUrlBytes(dataUrl);
+      var limit = kind === 'font' ? 3 * 1024 * 1024 : 5 * 1024 * 1024;
+      var image = kind === 'media' || kind === 'canvas' || kind === 'css-image';
+      if (!bytes || bytes > limit) {
+        stats.kept += 1;
+        if (image) stats.imagesKept += 1;
+        addWarning(stats, kind === 'font' ? 'Font exceeds 3 MB' : 'Resource exceeds 5 MB', key);
+        return false;
+      }
+      if (!accounted.has(key)) {
+        if (stats.inlineBytes + bytes > 40 * 1024 * 1024) {
+          stats.kept += 1;
+          if (image) stats.imagesKept += 1;
+          addWarning(stats, 'Inline budget exceeded', key);
+          return false;
+        }
+        accounted.add(key);
+        stats.inlineBytes += bytes;
+      }
+      stats.inlined += 1;
+      if (image) stats.imagesInlined += 1;
+      return true;
+    }
+
+    return { request: request, acceptDataUrl: acceptDataUrl };
+  }
+
+  function nodeAtPath(root, path) {
+    var node = root;
+    for (var i = 0; i < path.length && node; i += 1) node = node.childNodes[path[i]];
+    return node || null;
+  }
+
+  function nodePath(root, node) {
+    var path = [];
+    var current = node;
+    while (current && current !== root) {
+      var parent = current.parentNode;
+      if (!parent) return null;
+      path.unshift(Array.prototype.indexOf.call(parent.childNodes, current));
+      current = parent;
+    }
+    return current === root ? path : null;
+  }
+
+  function buildMediaPairs(liveRoot, cloneRoot) {
+    var pairs = [];
+    if (!liveRoot || !cloneRoot) return pairs;
+    var selector = 'img,canvas,picture source,video[poster]';
+    var liveNodes = [];
+    var rootTag = liveRoot.nodeType === 1 ? String(liveRoot.tagName || '').toLowerCase() : '';
+    if (rootTag === 'img' || rootTag === 'canvas' || rootTag === 'source'
+      || (rootTag === 'video' && liveRoot.hasAttribute('poster'))) liveNodes.push(liveRoot);
+    if (typeof liveRoot.querySelectorAll === 'function') liveNodes = liveNodes.concat(Array.prototype.slice.call(liveRoot.querySelectorAll(selector)));
+    liveNodes.forEach(function (live) {
+      var path = nodePath(liveRoot, live);
+      var clone = path ? nodeAtPath(cloneRoot, path) : null;
+      if (clone) pairs.push({ live: live, clone: clone });
+    });
+    return pairs;
+  }
+
+  function cssUrlIsFont(css, index) {
+    var fontStart = css.toLowerCase().lastIndexOf('@font-face', index);
+    var blockEnd = css.lastIndexOf('}', index);
+    return fontStart > blockEnd;
+  }
+
+  async function inlineCss(css, manager) {
+    if (!cloneLogic || typeof cloneLogic.findCssUrls !== 'function'
+      || typeof cloneLogic.replaceCssUrls !== 'function') return css;
+    var urls = cloneLogic.findCssUrls(css);
+    var replacements = Object.create(null);
+    await Promise.all(urls.map(function (url) {
+      var index = css.indexOf(url);
+      var kind = cssUrlIsFont(css, index) || resourceIsFont(url) ? 'font' : 'css-image';
+      return manager.request(url, kind).then(function (result) {
+        if (result && result.ok) replacements[url] = result.dataUrl;
+      });
+    }));
+    return cloneLogic.replaceCssUrls(css, replacements);
   }
 
   function documentScrollHeight() {
@@ -543,6 +792,251 @@
     return rect && Number.isFinite(rect.width) ? rect.width + 'px' : '';
   }
 
+  function resetHead(head, css) {
+    if (!head) return;
+    Array.prototype.slice.call(head.querySelectorAll('meta[charset],base,style')).forEach(function (node) {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    });
+    var charset = document.createElement('meta');
+    charset.setAttribute('charset', 'utf-8');
+    head.insertBefore(charset, head.firstChild || null);
+    var base = document.createElement('base');
+    base.setAttribute('href', location.href);
+    head.insertBefore(base, charset.nextSibling);
+    var style = document.createElement('style');
+    style.textContent = css || '';
+    head.appendChild(style);
+  }
+
+  function markInlineImage(stats) {
+    stats.inlined += 1;
+    stats.imagesInlined += 1;
+  }
+
+  function markKeptImage(stats, message, url) {
+    stats.kept += 1;
+    stats.imagesKept += 1;
+    addWarning(stats, message, url);
+  }
+
+  function removeResponsiveAttributes(clone) {
+    if (!clone || typeof clone.removeAttribute !== 'function') return;
+    var tag = String(clone.tagName || '').toLowerCase();
+    if (tag === 'img') {
+      clone.removeAttribute('srcset');
+      clone.removeAttribute('sizes');
+      var picture = clone.parentElement;
+      if (picture && String(picture.tagName || '').toLowerCase() === 'picture') {
+        Array.prototype.forEach.call(picture.querySelectorAll('source'), function (source) {
+          source.removeAttribute('srcset');
+        });
+      }
+    }
+  }
+
+  function drawImageDataUrl(image) {
+    if (!image || image.complete !== true || !(Number(image.naturalWidth) > 0)) return null;
+    var canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    var context = canvas.getContext('2d');
+    if (!context || typeof context.drawImage !== 'function') return null;
+    context.drawImage(image, 0, 0);
+    return canvas.toDataURL('image/png');
+  }
+
+  function replaceCanvasClone(clone, live, src) {
+    var image = document.createElement('img');
+    Array.prototype.forEach.call(clone.attributes || [], function (attribute) {
+      if (attribute.name !== 'src' && attribute.name !== 'srcset') image.setAttribute(attribute.name, attribute.value);
+    });
+    if (!image.hasAttribute('width') && live && Number.isFinite(Number(live.width))) {
+      image.setAttribute('width', String(live.width));
+    }
+    if (!image.hasAttribute('height') && live && Number.isFinite(Number(live.height))) {
+      image.setAttribute('height', String(live.height));
+    }
+    if (src) image.setAttribute('src', src);
+    if (clone.parentNode) clone.parentNode.replaceChild(image, clone);
+    return image;
+  }
+
+  async function inlineImages(pairs, manager, stats, onProgress) {
+    var mediaPairs = pairs.filter(function (pair) {
+      return pair && pair.live && String(pair.live.tagName || '').toLowerCase() !== 'source';
+    });
+    var completed = 0;
+    var progress = typeof onProgress === 'function' ? onProgress : function () {};
+    await Promise.all(mediaPairs.map(async function (pair, pairIndex) {
+      try {
+        var live = pair.live;
+        var clone = pair.clone;
+        if (!clone) return;
+        var tag = String(live.tagName || '').toLowerCase();
+        if (tag === 'canvas') {
+        var canvasUrl = null;
+        try {
+          canvasUrl = live.toDataURL('image/png');
+        } catch (error) {
+          canvasUrl = null;
+        }
+        if (canvasUrl && canvasUrl.indexOf('data:') === 0) {
+          if (manager.acceptDataUrl(canvasUrl, 'canvas:' + pairIndex, 'canvas')) {
+            pair.clone = replaceCanvasClone(clone, live, canvasUrl);
+          } else {
+            replaceCanvasClone(clone, live, '');
+          }
+        } else {
+          replaceCanvasClone(clone, live, '');
+          markKeptImage(stats, 'Canvas could not be serialized');
+        }
+        return;
+      }
+
+      var attribute = tag === 'video' ? 'poster' : 'src';
+      var sourceUrl = tag === 'video'
+        ? (live.getAttribute('poster') || live.poster || '')
+        : (live.currentSrc || live.getAttribute('src') || live.src || '');
+      if (!sourceUrl) return;
+      if (/^data:/i.test(sourceUrl)) {
+        clone.setAttribute(attribute, sourceUrl);
+        markInlineImage(stats);
+        if (tag === 'img') removeResponsiveAttributes(clone);
+        return;
+      }
+
+      var url = absoluteUrl(sourceUrl, live.baseURI || document.baseURI);
+      var safeUrl = /^\s*javascript\s*:/i.test(sourceUrl) ? '#' : (url || sourceUrl);
+      var result = null;
+      if (tag === 'img' && isHttpUrl(url)) {
+        try {
+          var drawn = drawImageDataUrl(live);
+          if (drawn) {
+            if (manager.acceptDataUrl(drawn, 'image:' + pairIndex, 'media')) {
+              clone.setAttribute('src', drawn);
+            } else {
+              clone.setAttribute('src', url);
+            }
+            removeResponsiveAttributes(clone);
+            return;
+          }
+        } catch (error) {
+          result = null;
+        }
+      }
+      if (isHttpUrl(url)) result = await manager.request(url, 'media');
+      if (result && result.ok) clone.setAttribute(attribute, result.dataUrl);
+      else {
+        clone.setAttribute(attribute, safeUrl);
+        if (!result || result.keep !== true) markKeptImage(stats, 'Media could not be inlined', safeUrl);
+      }
+      if (tag === 'img') removeResponsiveAttributes(clone);
+      } catch (error) {
+        markKeptImage(stats, 'Media could not be inlined');
+      } finally {
+        completed += 1;
+        progress(completed, mediaPairs.length);
+      }
+    }));
+  }
+
+  function visibleRect(element) {
+    var rect = element && typeof element.getBoundingClientRect === 'function' ? element.getBoundingClientRect() : null;
+    if (!rect) return null;
+    return {
+      x: Number.isFinite(rect.x) ? rect.x : Number(rect.left) || 0,
+      y: Number.isFinite(rect.y) ? rect.y : Number(rect.top) || 0,
+      width: Math.max(0, Number(rect.width) || 0),
+      height: Math.max(0, Number(rect.height) || 0),
+    };
+  }
+
+  function clipToViewport(rect) {
+    if (!rect) return null;
+    var viewportWidth = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+    var viewportHeight = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+    var left = Math.max(0, rect.x);
+    var top = Math.max(0, rect.y);
+    var right = Math.min(viewportWidth, rect.x + rect.width);
+    var bottom = Math.min(viewportHeight, rect.y + rect.height);
+    return {
+      x: left,
+      y: top,
+      width: Math.max(0, right - left),
+      height: Math.max(0, bottom - top),
+    };
+  }
+
+  function rectFullyVisible(rect) {
+    var width = Math.max(document.documentElement.clientWidth || 0, window.innerWidth || 0);
+    var height = Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+    return rect && rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= width && rect.y + rect.height <= height;
+  }
+
+  async function captureScreenshot(mode, element, stats) {
+    var originalX = Number.isFinite(window.scrollX) ? window.scrollX : (window.pageXOffset || 0);
+    var originalY = Number.isFinite(window.scrollY) ? window.scrollY : (window.pageYOffset || 0);
+    var visibilityTargets = [host];
+    if (shadow && typeof shadow.querySelectorAll === 'function') {
+      Array.prototype.forEach.call(shadow.querySelectorAll('.selection-overlay'), function (overlay) {
+        if (visibilityTargets.indexOf(overlay) === -1) visibilityTargets.push(overlay);
+      });
+    }
+    var visibility = visibilityTargets.map(function (target) {
+      return { target: target, value: target && target.style ? target.style.visibility : '' };
+    });
+    try {
+      var rect;
+      if (mode === 'component') {
+        rect = visibleRect(element);
+        if (!rectFullyVisible(rect) && element && typeof element.scrollIntoView === 'function') {
+          element.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
+          await wait(150);
+        }
+        rect = clipToViewport(visibleRect(element));
+      } else {
+        window.scrollTo({ left: 0, top: 0, behavior: 'instant' });
+        await wait(0);
+        rect = {
+          x: 0,
+          y: 0,
+          width: Math.max(window.innerWidth || document.documentElement.clientWidth || 0, 1),
+          height: Math.max(window.innerHeight || document.documentElement.clientHeight || 0, 1),
+        };
+      }
+      if (!rect || rect.width <= 0 || rect.height <= 0) throw new Error('Capture target is not visible');
+      visibilityTargets.forEach(function (target) {
+        if (target && target.style) target.style.visibility = 'hidden';
+      });
+      await waitAnimationFrames(2);
+      var response = await sendRuntimeMessage({
+        type: messageTypes.takeScreenshot,
+        rect: rect,
+        dpr: Math.max(0.5, Math.min(8, Number(window.devicePixelRatio) || 1)),
+      });
+      if (!response || response.ok === false || typeof response.dataUrl !== 'string') {
+        throw new Error(response && response.error ? response.error : 'Screenshot failed');
+      }
+      return response.dataUrl;
+    } catch (error) {
+      addWarning(stats, 'Screenshot failed: ' + (error && error.message ? error.message : String(error)));
+      return null;
+    } finally {
+      try {
+        window.scrollTo({ left: originalX, top: originalY, behavior: 'instant' });
+      } catch (error) {
+        addWarning(stats, 'Screenshot scroll position could not be restored');
+      }
+      visibility.forEach(function (entry) {
+        try {
+          if (entry.target && entry.target.style) entry.target.style.visibility = entry.value;
+        } catch (error) {
+          addWarning(stats, 'Screenshot overlay visibility could not be restored');
+        }
+      });
+    }
+  }
+
   async function captureParts(mode, element) {
     if (mode !== 'page' && mode !== 'component') throw new Error('Unknown capture mode');
     if (mode === 'component' && (!element || !isElementConnected(element))) throw new Error('Selected component is no longer available');
@@ -551,18 +1045,50 @@
         setStatus('Scrolling ' + index + '/' + total, 'info');
       });
     }
-    var clone = cleanDomNode(cloneForCapture(mode === 'page' ? document.documentElement : element));
+    var liveRoot = mode === 'page' ? document.documentElement : element;
+    var clone = cloneForCapture(liveRoot);
+    var mediaPairs = buildMediaPairs(liveRoot, clone);
+    clone = cleanDomNode(clone);
     setStatus('Collecting styles…', 'info');
     var css = await collectCss();
     var htmlAttrs = mode === 'component' ? recordAttributes(document.documentElement) : {};
     var bodyAttrs = mode === 'component' ? recordAttributes(document.body) : {};
     var computedWidth = mode === 'component' ? computedElementWidth(element) : '';
-    var stats = {
-      sheetsOk: css.stats.sheetsOk,
-      sheetsFailed: css.stats.sheetsFailed,
-      failedUrls: css.stats.failedUrls,
-      cssBytes: css.stats.cssBytes,
-    };
+    var stats = makeResourceStats(css.stats);
+    var manager = createResourceManager(stats);
+    var imageTotal = mediaPairs.filter(function (pair) {
+      return pair && pair.live && String(pair.live.tagName || '').toLowerCase() !== 'source';
+    }).length;
+    setStatus('Inlining images 0/' + imageTotal, 'info');
+    css.css = await inlineCss(css.css, manager);
+    await inlineImages(mediaPairs, manager, stats, function (current, total) {
+      setStatus('Inlining images ' + current + '/' + total, 'info');
+    });
+    var rootPair = mediaPairs.filter(function (pair) { return pair.live === liveRoot; })[0];
+    if (rootPair && rootPair.clone && !rootPair.clone.parentNode) clone = rootPair.clone;
+    stats.cssBytes = byteLength(css.css);
+    var html;
+    if (mode === 'component') {
+      if (!cloneLogic || typeof cloneLogic.buildComponentDocument !== 'function') {
+        throw new Error('Clone document helper is unavailable');
+      }
+      html = cloneLogic.buildComponentDocument({
+        title: document.title,
+        url: location.href,
+        htmlAttrs: htmlAttrs,
+        bodyAttrs: bodyAttrs,
+        css: css.css,
+        bodyHtml: clone.outerHTML,
+      });
+    } else {
+      var head = clone.querySelector ? clone.querySelector('head') : null;
+      if (!head) {
+        head = document.createElement('head');
+        clone.insertBefore(head, clone.firstChild || null);
+      }
+      resetHead(head, css.css);
+      html = '<!doctype html>\n' + clone.outerHTML;
+    }
     return {
       mode: mode,
       title: document.title,
@@ -570,7 +1096,7 @@
       htmlAttrs: htmlAttrs,
       bodyAttrs: bodyAttrs,
       computedWidth: computedWidth,
-      html: clone.outerHTML,
+      html: html,
       css: css.css,
       stats: stats,
       capturedAt: Date.now(),

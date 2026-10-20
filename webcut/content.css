@@ -134,6 +134,10 @@ h1 {
   color: var(--webcut-accent-strong);
 }
 
+.toolbar-status[data-level="warning"] {
+  color: #f6d365;
+}
+
 .toolbar-status[data-level="error"] {
   color: #ffb4ab;
 }
