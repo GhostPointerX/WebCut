@@ -25,7 +25,7 @@
   function isSelectable(el, hostEl) {
     if (!el || typeof el !== 'object' || !el.tagName) return false;
     var tag = tagName(el);
-    if (['html', 'webcut-ui-root', 'script', 'style', 'link', 'meta', 'head', 'title', 'noscript', 'template', 'base'].indexOf(tag) !== -1) return false;
+    if (['html', 'body', 'webcut-ui-root', 'script', 'style', 'link', 'meta', 'head', 'title', 'noscript', 'template', 'base'].indexOf(tag) !== -1) return false;
     if (el === hostEl) return false;
     if (hostEl && typeof hostEl.contains === 'function' && hostEl.contains(el)) return false;
     return true;

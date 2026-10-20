@@ -271,6 +271,7 @@
     selection.highlight.hidden = true;
 
     addSelectionListener('mousemove', onSelectionMouseMove, true);
+    addSelectionListener('pointermove', onSelectionMouseMove, true);
     addSelectionListener('click', onSelectionClick, true);
     addSelectionListener('mousedown', blockSelectionEvent, true);
     addSelectionListener('mouseup', blockSelectionEvent, true);
@@ -1113,6 +1114,100 @@
     return rect && Number.isFinite(rect.width) ? rect.width + 'px' : '';
   }
 
+  function copyComputedStyle(live, clone) {
+    if (!live || !clone || live.nodeType !== 1 || clone.nodeType !== 1
+      || typeof window.getComputedStyle !== 'function' || !clone.style) return;
+    var computed;
+    try {
+      computed = window.getComputedStyle(live);
+    } catch (error) {
+      return;
+    }
+    for (var index = 0; index < computed.length; index += 1) {
+      var property = computed[index];
+      if (!property) continue;
+      var value = computed.getPropertyValue(property);
+      if (!value) continue;
+      try {
+        clone.style.setProperty(property, value, 'important');
+      } catch (error) {
+        // A browser-specific computed property should not abort a capture.
+      }
+    }
+  }
+
+  function pseudoStyleRule(live, clone, pseudo) {
+    if (!live || !clone || !clone.dataset || typeof window.getComputedStyle !== 'function') return '';
+    var computed;
+    try {
+      computed = window.getComputedStyle(live, pseudo);
+    } catch (error) {
+      return '';
+    }
+    var content = computed.getPropertyValue('content');
+    if (!content || content === 'none' || content === 'normal') return '';
+    var declarations = [];
+    for (var index = 0; index < computed.length; index += 1) {
+      var property = computed[index];
+      if (!property) continue;
+      var value = computed.getPropertyValue(property);
+      if (!value) continue;
+      declarations.push(property + ':' + value + ' !important');
+    }
+    if (!declarations.length) return '';
+    return '[data-webcut-capture-node="' + clone.dataset.webcutCaptureNode + '"]' + pseudo
+      + '{' + declarations.join(';') + '}';
+  }
+
+  function captureComputedComponentStyles(liveRoot, cloneRoot) {
+    var pseudoRules = [];
+    var nodeIndex = 0;
+
+    function visit(live, clone) {
+      if (!live || !clone || live.nodeType !== 1 || clone.nodeType !== 1) return;
+      clone.dataset.webcutCaptureNode = String(nodeIndex);
+      nodeIndex += 1;
+      copyComputedStyle(live, clone);
+      var before = pseudoStyleRule(live, clone, '::before');
+      var after = pseudoStyleRule(live, clone, '::after');
+      if (before) pseudoRules.push(before);
+      if (after) pseudoRules.push(after);
+
+      var liveChildren = live.children || [];
+      var cloneChildren = clone.children || [];
+      var count = Math.min(liveChildren.length, cloneChildren.length);
+      for (var index = 0; index < count; index += 1) visit(liveChildren[index], cloneChildren[index]);
+    }
+
+    visit(liveRoot, cloneRoot);
+    return pseudoRules.join('\n');
+  }
+
+  async function inlineCloneStyleAttributes(root, manager) {
+    if (!root || !manager || !cloneLogic || typeof cloneLogic.findCssUrls !== 'function'
+      || typeof cloneLogic.replaceCssUrls !== 'function') return;
+    var nodes = [root];
+    if (typeof root.querySelectorAll === 'function') {
+      nodes = nodes.concat(Array.prototype.slice.call(root.querySelectorAll('[style]')));
+    }
+    await Promise.all(nodes.map(async function (node) {
+      if (!node || typeof node.getAttribute !== 'function' || typeof node.setAttribute !== 'function') return;
+      var styleText = node.getAttribute('style');
+      if (!styleText) return;
+      if (cloneLogic && typeof cloneLogic.absolutizeCssUrls === 'function') {
+        styleText = cloneLogic.absolutizeCssUrls(styleText, document.baseURI);
+      }
+      var urls = cloneLogic.findCssUrls(styleText);
+      var replacements = Object.create(null);
+      await Promise.all(urls.map(function (url) {
+        return manager.request(url, 'css-image').then(function (result) {
+          if (result && result.ok) replacements[url] = result.dataUrl;
+        });
+      }));
+      node.setAttribute('style', cloneLogic.replaceCssUrls(styleText, replacements));
+    }));
+  }
+
   function resetHead(head, css) {
     if (!head) return;
     Array.prototype.slice.call(head.querySelectorAll('meta[charset],base,style')).forEach(function (node) {
@@ -1368,12 +1463,23 @@
     }
     var liveRoot = mode === 'page' ? document.documentElement : element;
     var clone = cloneForCapture(liveRoot);
+    if (mode === 'component') setStatus('Freezing component styles…', 'info');
+    var componentPseudoCss = mode === 'component'
+      ? captureComputedComponentStyles(liveRoot, clone)
+      : '';
     var mediaPairs = buildMediaPairs(liveRoot, clone);
     clone = cleanDomNode(clone);
     setStatus('Collecting styles…', 'info');
     var css = await collectCss();
     var htmlAttrs = mode === 'component' ? recordAttributes(document.documentElement) : {};
     var bodyAttrs = mode === 'component' ? recordAttributes(document.body) : {};
+    if (mode === 'component') {
+      // The source page's inline body/html layout can add an arbitrary offset
+      // around the selected node. Keep identity attributes for CSS selectors,
+      // but let the standalone component reset control the outer frame.
+      delete htmlAttrs.style;
+      delete bodyAttrs.style;
+    }
     var computedWidth = mode === 'component' ? computedElementWidth(element) : '';
     var stats = makeResourceStats(css.stats);
     var manager = createResourceManager(stats);
@@ -1381,7 +1487,8 @@
       return pair && pair.live && String(pair.live.tagName || '').toLowerCase() !== 'source';
     }).length;
     setStatus('Inlining images 0/' + imageTotal, 'info');
-    css.css = await inlineCss(css.css, manager);
+    css.css = await inlineCss(css.css + (componentPseudoCss ? '\n' + componentPseudoCss : ''), manager);
+    if (mode === 'component') await inlineCloneStyleAttributes(clone, manager);
     await inlineImages(mediaPairs, manager, stats, function (current, total) {
       setStatus('Inlining images ' + current + '/' + total, 'info');
     });

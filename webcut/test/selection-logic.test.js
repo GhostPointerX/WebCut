@@ -79,7 +79,7 @@ test('describeElement accepts an SVG className baseVal', () => {
 
 test('isSelectable rejects invalid and nonvisual tag names', () => {
   const host = fake('webcut-ui-root');
-  for (const value of [null, {}, fake('html'), fake('webcut-ui-root'), fake('script'), fake('style'), fake('link'), fake('meta'), fake('head'), fake('title'), fake('noscript'), fake('template'), fake('base')]) {
+  for (const value of [null, {}, fake('html'), fake('body'), fake('webcut-ui-root'), fake('script'), fake('style'), fake('link'), fake('meta'), fake('head'), fake('title'), fake('noscript'), fake('template'), fake('base')]) {
     assertEqual(isSelectable(value, host), false, `rejected ${value && value.tagName}`);
   }
   assertEqual(isSelectable(fake('div'), host), true, 'div is selectable');
@@ -102,11 +102,11 @@ test('pickTarget returns the first selectable element or null', () => {
   assertEqual(pickTarget([null, fake('style'), host], host), null, 'no valid target');
 });
 
-test('pickParent uses only a selectable parentElement and allows body', () => {
+test('pickParent uses only a selectable parentElement and stops before body', () => {
   const html = fake('html');
   const body = link(html, fake('body'));
   const child = link(body, fake('div'));
-  assertEqual(pickParent(child), body, 'body parent');
+  assertEqual(pickParent(child), null, 'body is not a component target');
   assertEqual(pickParent(body), null, 'html excluded');
   assertEqual(pickParent(fake('div')), null, 'missing parent');
 });
@@ -130,24 +130,23 @@ test('selection navigation supports current, up/down ancestor round trips, and u
   assertEqual(nav.current(), null, 'initial current');
   nav.set(leaf);
   assertEqual(nav.up(), section, 'up to section');
-  assertEqual(nav.up(), body, 'up to body');
-  assertEqual(nav.up(), body, 'top remains unchanged');
-  assertEqual(nav.down(), section, 'down to remembered section');
+  assertEqual(nav.up(), section, 'body boundary remains unchanged');
   assertEqual(nav.down(), leaf, 'down to remembered leaf');
   assertEqual(nav.down(), leaf, 'leaf remains unchanged');
 });
 
 test('set clears history and reparented stale history falls back to pickChild', () => {
   const body = fake('body');
-  const section = link(body, fake('section'));
+  const outer = link(body, fake('main'));
+  const section = link(outer, fake('section'));
   const leaf = link(section, fake('button'));
-  const replacement = link(body, fake('article'));
+  const replacement = link(outer, fake('article'));
   const nav = createSelectionNav();
   nav.set(leaf);
   nav.up();
   nav.up();
   section.parentElement = null;
-  body.children = [replacement];
+  outer.children = [replacement];
   assertEqual(nav.down(), replacement, 'stale remembered target falls back to current child');
   nav.set(leaf);
   assertEqual(nav.current(), leaf, 'set current');

@@ -87,6 +87,10 @@
       .replace(/'/g, '&#39;');
   }
 
+  function escapeStyleText(value) {
+    return stringValue(value).replace(/<\/style/gi, '<\\/style');
+  }
+
   function isAbsoluteHttpUrl(value) {
     if (typeof value !== 'string' || !/^https?:\/\//i.test(value)) return false;
     try {
@@ -198,7 +202,7 @@
     var url = escapeHtml(options.url);
     var htmlAttrs = attrsToString(options.htmlAttrs);
     var bodyAttrs = attrsToString(options.bodyAttrs);
-    var css = stringValue(options.css);
+    var css = escapeStyleText(options.css);
     var bodyHtml = stringValue(options.bodyHtml);
     return '<!DOCTYPE html>\n'
       + '<html' + htmlAttrs + '>\n'
@@ -207,7 +211,8 @@
       + '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
       + '<title>' + title + '</title>\n'
       + '<base href="' + url + '">\n'
-      + '<style>' + css + '</style>\n'
+      + '<style data-webcut-reset="true">html,body{margin:0 !important;padding:0 !important;min-width:0;}body > :first-child{margin:0 !important;}</style>\n'
+      + '<style data-webcut-capture="true">' + css + '</style>\n'
       + '</head>\n'
       + '<body' + bodyAttrs + '>' + bodyHtml + '</body>\n'
       + '</html>';
@@ -236,6 +241,7 @@
     isEventHandlerAttr: isEventHandlerAttr,
     buildFileName: buildFileName,
     escapeHtml: escapeHtml,
+    escapeStyleText: escapeStyleText,
     attrsToString: attrsToString,
     findCssUrls: findCssUrls,
     replaceCssUrls: replaceCssUrls,

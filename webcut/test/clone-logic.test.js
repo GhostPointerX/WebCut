@@ -7,6 +7,7 @@ const {
   buildFileName,
   computeScrollSteps,
   escapeHtml,
+  escapeStyleText,
   findCssUrls,
   formatBytes,
   isEventHandlerAttr,
@@ -125,6 +126,10 @@ test('escapeHtml escapes markup characters and tolerates nullish values', () => 
   assertEqual(escapeHtml(null), '', 'null escaping');
 });
 
+test('escapeStyleText prevents captured CSS from closing its style element', () => {
+  assertEqual(escapeStyleText('a{content:"</style><script>bad</script>"}'), 'a{content:"<\\/style><script>bad</script>"}', 'style escaping');
+});
+
 test('attrsToString emits escaped safe attributes and excludes unsafe names', () => {
   assertEqual(
     attrsToString({ class: 'card', 'data-kind': 'x&y', onclick: 'bad()', 'bad name': 'bad' }),
@@ -165,7 +170,8 @@ test('buildComponentDocument includes document metadata, base, styles, and attri
   assertEqual(document.indexOf('<meta name="viewport" content="width=device-width, initial-scale=1">') !== -1, true, 'viewport');
   assertEqual(document.indexOf('<title>A &lt;component&gt;</title>') !== -1, true, 'title');
   assertEqual(document.indexOf('<base href="https://example.com/path?a=1&amp;b=2">') !== -1, true, 'base');
-  assertEqual(document.indexOf('<style>.card{color:red}</style>') !== -1, true, 'style');
+  assertEqual(document.indexOf('<style data-webcut-reset="true">') !== -1, true, 'reset style');
+  assertEqual(document.indexOf('<style data-webcut-capture="true">.card{color:red}</style>') !== -1, true, 'style');
   assertEqual(document.indexOf('<body class="card"><main class="card">Hello</main>') !== -1, true, 'body');
 });
 
