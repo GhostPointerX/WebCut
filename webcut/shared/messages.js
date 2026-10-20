@@ -37,7 +37,7 @@ var MSG = Object.freeze({
   removeFromFolder: 'removeFromFolder',
   // Request: { type: "toggleToolbar", tabId?: number, action?: "page"|"component" }; response: { ok: boolean, visible?: boolean, busy?: boolean, error?: string, reason?: "restricted"|"no-tab"|"url-unknown"|"inject-failed"|"no-receiver" }.
   toggleToolbar: 'toggleToolbar',
-  // Request: { type: "toggleDrawer", tabId?: number }; response: { ok: boolean, error?: string, reason?: "restricted"|"no-tab"|"url-unknown"|"inject-failed"|"no-receiver" }.
+  // Request: { type: "toggleDrawer", tabId?: number }; response: { ok: boolean, visible?: boolean, error?: string, reason?: "restricted"|"no-tab"|"url-unknown"|"inject-failed"|"no-receiver" }.
   toggleDrawer: 'toggleDrawer'
 });
 

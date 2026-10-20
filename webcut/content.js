@@ -28,6 +28,10 @@
   var lastCapture = { id: null, fileName: '', title: '', url: '', type: '', html: '', bytes: 0 };
   var previewModal = null;
   var previewRestoreFocus = null;
+  var drawer = null;
+  var drawerFrame = null;
+  var drawerCloseButton = null;
+  var drawerOpen = false;
   var selectionLogic = typeof WebCutSelectionLogic !== 'undefined'
     ? WebCutSelectionLogic
     : (typeof window !== 'undefined' ? window.WebCutSelectionLogic : null);
@@ -84,9 +88,11 @@
   toolbar.appendChild(actions);
   toolbar.appendChild(status);
   shadow.appendChild(toolbar);
+  createDrawer();
 
   closeButton.addEventListener('click', function () {
     cancelSelection();
+    closeDrawer();
     host.hidden = true;
     setStatus('', 'info');
   });
@@ -132,7 +138,7 @@
       return false;
     }
     if (message.type === messageTypes.toggleDrawer) {
-      sendResponse({ ok: false, error: 'Drawer is not available yet' });
+      sendResponse({ ok: true, visible: toggleDrawer() });
       return false;
     }
     return undefined;
@@ -140,6 +146,7 @@
 
   window.addEventListener('pagehide', function () {
     cancelSelection();
+    closeDrawer();
   }, true);
 
   function createButton(action, label, ariaLabel) {
@@ -307,6 +314,66 @@
     return button;
   }
 
+  function createDrawer() {
+    drawer = document.createElement('aside');
+    drawer.className = 'content-drawer';
+    drawer.setAttribute('aria-label', 'WebCut saved items');
+    drawer.setAttribute('aria-hidden', 'true');
+
+    var header = document.createElement('header');
+    header.className = 'content-drawer-header';
+    var heading = document.createElement('h2');
+    heading.textContent = 'Saved items';
+    drawerCloseButton = document.createElement('button');
+    drawerCloseButton.type = 'button';
+    drawerCloseButton.className = 'content-drawer-close';
+    drawerCloseButton.textContent = '×';
+    drawerCloseButton.setAttribute('aria-label', 'Close saved items');
+    header.appendChild(heading);
+    header.appendChild(drawerCloseButton);
+
+    drawerFrame = document.createElement('iframe');
+    drawerFrame.className = 'content-drawer-frame';
+    drawerFrame.title = 'WebCut saved items';
+    drawerFrame.src = chrome.runtime.getURL('sidepanel-iframe.html');
+    drawer.appendChild(header);
+    drawer.appendChild(drawerFrame);
+    shadow.appendChild(drawer);
+    drawerCloseButton.addEventListener('click', closeDrawer);
+    window.addEventListener('keydown', function (event) {
+      if (event.key !== 'Escape' || !drawerOpen) return;
+      var path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      var active = shadow.activeElement;
+      if (path.indexOf(drawer) === -1 && active !== drawer && active !== drawerFrame && active !== drawerCloseButton) return;
+      event.preventDefault();
+      closeDrawer();
+    }, true);
+  }
+
+  function showDrawer() {
+    if (!drawer) return;
+    host.hidden = false;
+    drawerOpen = true;
+    drawer.setAttribute('aria-hidden', 'false');
+    window.requestAnimationFrame(function () {
+      if (drawerOpen) drawer.classList.add('is-open');
+    });
+    drawerCloseButton.focus();
+  }
+
+  function closeDrawer() {
+    if (!drawer) return;
+    drawerOpen = false;
+    drawer.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+
+  function toggleDrawer() {
+    if (drawerOpen) closeDrawer();
+    else showDrawer();
+    return drawerOpen;
+  }
+
   function openPreviewModal() {
     if (!lastCapture || typeof lastCapture.html !== 'string' || !lastCapture.html) {
       throw new Error('The saved capture has no HTML preview');
@@ -365,10 +432,6 @@
     info.appendChild(source);
     info.appendChild(infoActions);
 
-    var notice = document.createElement('p');
-    notice.className = 'preview-modal-notice';
-    notice.hidden = true;
-
     var frameWrap = document.createElement('div');
     frameWrap.className = 'preview-modal-body';
     var frame = document.createElement('iframe');
@@ -385,7 +448,6 @@
 
     dialog.appendChild(header);
     dialog.appendChild(info);
-    dialog.appendChild(notice);
     dialog.appendChild(frameWrap);
     overlay.appendChild(dialog);
     shadow.appendChild(overlay);
@@ -395,7 +457,6 @@
       closeButton: closeButton,
       downloadButton: downloadButton,
       collectionsButton: collectionsButton,
-      notice: notice,
       keydown: function (event) {
         if (event.key !== 'Escape') return;
         event.preventDefault();
@@ -405,8 +466,8 @@
     closeButton.addEventListener('click', closePreviewModal);
     downloadButton.addEventListener('click', downloadLastCapture);
     collectionsButton.addEventListener('click', function () {
-      notice.textContent = 'Collections open in the side panel, coming in a later step';
-      notice.hidden = false;
+      closePreviewModal();
+      showDrawer();
     });
     overlay.addEventListener('click', function (event) {
       if (event.target === overlay) closePreviewModal();

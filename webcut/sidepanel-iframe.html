@@ -7,7 +7,61 @@
     <link rel="stylesheet" href="sidepanel.css">
   </head>
   <body>
-    <h1>WebCut</h1>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">SAVED CAPTURES</p>
+          <h1>WebCut</h1>
+        </div>
+        <span id="saved-count" class="saved-count">0 saved</span>
+      </header>
+
+      <section class="search-section" aria-label="Search saved captures">
+        <label class="sr-only" for="search-input">Search saved pages</label>
+        <div class="search-field">
+          <input id="search-input" type="search" placeholder="Search saved pages" autocomplete="off" spellcheck="false">
+          <button id="clear-search" class="icon-button" type="button" aria-label="Clear search" hidden>×</button>
+        </div>
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite">Loading saved captures…</p>
+
+      <section id="empty-state" class="empty-state" aria-live="polite" hidden>
+        <h2>No saved captures yet</h2>
+        <p>Clone a page from the toolbar to see it here.</p>
+      </section>
+
+      <section id="recent-section" class="content-section" aria-labelledby="recent-heading" hidden>
+        <div class="section-heading">
+          <h2 id="recent-heading">Recent</h2>
+        </div>
+        <div id="recent-list" class="recent-list"></div>
+        <button id="recent-toggle" class="text-button" type="button">Show all recent</button>
+      </section>
+
+      <!-- Filled in step 10B. -->
+      <section id="folders-area" class="folders-area" aria-label="Folders">
+        <p>Folders coming soon</p>
+      </section>
+
+      <section id="results-section" class="content-section" aria-labelledby="results-heading" hidden>
+        <div class="section-heading">
+          <h2 id="results-heading">Search results</h2>
+        </div>
+        <div id="results-list" class="item-list"></div>
+      </section>
+
+      <section id="preview-view" class="preview-view" hidden aria-labelledby="preview-heading">
+        <div class="preview-header">
+          <button id="preview-back" class="text-button" type="button">← Back</button>
+          <h2 id="preview-heading">Preview</h2>
+        </div>
+        <p id="preview-status" class="status">Loading preview…</p>
+        <div id="preview-frame-wrap" class="preview-frame-wrap"></div>
+      </section>
+    </main>
+    <script src="shared/messages.js"></script>
+    <script src="shared/sidepanel-logic.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

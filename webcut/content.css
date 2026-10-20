@@ -295,16 +295,6 @@ h1 {
   outline-offset: 2px;
 }
 
-.preview-modal-notice {
-  margin: 8px 14px 0;
-  padding: 7px 9px;
-  color: #f6d365;
-  font-size: 11px;
-  background: rgb(246 211 101 / 10%);
-  border: 1px solid rgb(246 211 101 / 35%);
-  border-radius: var(--webcut-radius-small);
-}
-
 .preview-modal-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -320,6 +310,84 @@ h1 {
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+.content-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 20;
+  width: min(380px, 100vw);
+  height: 100vh;
+  overflow: hidden;
+  pointer-events: none;
+  visibility: hidden;
+  color: var(--webcut-text);
+  background: var(--webcut-bg);
+  border-left: 1px solid var(--webcut-border);
+  box-shadow: -18px 0 50px rgb(0 0 0 / 34%);
+  transform: translateX(100%);
+  transition: transform 180ms ease-out, visibility 180ms ease-out;
+}
+
+.content-drawer.is-open {
+  pointer-events: auto;
+  visibility: visible;
+  transform: translateX(0);
+}
+
+.content-drawer-header {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 48px;
+  padding: 8px 10px 8px 14px;
+  color: var(--webcut-text);
+  background: var(--webcut-bg);
+  border-bottom: 1px solid var(--webcut-border);
+}
+
+.content-drawer-header h2 {
+  margin: 0;
+  font: 700 14px/1.2 var(--webcut-font);
+}
+
+.content-drawer-close {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--webcut-text);
+  font: 22px/1 var(--webcut-font);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--webcut-radius-small);
+  cursor: pointer;
+}
+
+.content-drawer-close:hover {
+  color: var(--webcut-accent-strong);
+  background: rgb(255 255 255 / 8%);
+  border-color: var(--webcut-border);
+}
+
+.content-drawer-close:focus-visible {
+  outline: 2px solid var(--webcut-accent);
+  outline-offset: 2px;
+}
+
+.content-drawer-frame {
+  display: block;
+  width: 100%;
+  height: calc(100% - 48px);
+  margin-top: 48px;
+  border: 0;
+  background: #0f121b;
 }
 
 @keyframes webcut-preview-in {
@@ -383,6 +451,10 @@ h1 {
 
   .preview-modal {
     animation: none;
+  }
+
+  .content-drawer {
+    transition: none;
   }
 
   .toolbar-button {
