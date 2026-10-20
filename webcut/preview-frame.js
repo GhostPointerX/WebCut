@@ -43,7 +43,7 @@ function showPreview(html) {
 }
 
 window.addEventListener('message', (event) => {
-  if (event.source !== window.parent || event.origin !== window.location.origin) {
+  if (event.source !== window.parent) {
     return;
   }
 
