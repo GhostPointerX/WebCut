@@ -195,6 +195,8 @@ h2 {
 
 .recent-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .recent-list.expanded {
@@ -212,12 +214,12 @@ h2 {
 
 .compact-card {
   display: grid;
-  gap: 8px;
-  padding: 9px;
+  gap: 6px;
+  padding: 7px;
 }
 
 .compact-card .thumbnail {
-  aspect-ratio: 1.45;
+  aspect-ratio: 1.8;
 }
 
 .capture-card {
@@ -424,6 +426,10 @@ h2 {
   background: var(--panel);
 }
 
+.folder-form[hidden] {
+  display: none;
+}
+
 .folder-form input {
   width: 100%;
   min-height: 34px;
@@ -615,6 +621,10 @@ h2 {
   min-width: 0;
 }
 
+.folder-view[hidden] {
+  display: none;
+}
+
 .folder-view-header {
   display: flex;
   align-items: center;
@@ -652,6 +662,10 @@ h2 {
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--panel-soft);
+}
+
+.folder-picker[hidden] {
+  display: none;
 }
 
 .folder-picker h3 {
@@ -715,6 +729,10 @@ h2 {
   display: grid;
   gap: 10px;
   min-height: 0;
+}
+
+.preview-view[hidden] {
+  display: none;
 }
 
 .preview-header {

@@ -199,6 +199,7 @@
         }
         setStatus('Saved items opened.', 'success');
       });
+      window.close();
       return;
     }
     if (!chrome.sidePanel || typeof chrome.sidePanel.open !== 'function') {
@@ -211,6 +212,7 @@
     var result;
     try {
       result = chrome.sidePanel.open({ tabId: activeTabId });
+      window.close();
     } catch (error) {
       changeRequestCount(-1);
       setStatus('Unable to open Saved Items: ' + (error && error.message ? error.message : String(error)), 'error');
