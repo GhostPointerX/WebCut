@@ -18,6 +18,10 @@
   var stateApi = typeof WebCutToolbarState !== 'undefined' ? WebCutToolbarState : null;
   var toolbarState = stateApi ? stateApi.createToolbarState() : createFallbackState();
   var messageTypes = typeof WC !== 'undefined' && WC.MSG ? WC.MSG : {};
+  var storageKeys = typeof WC !== 'undefined' && WC.KEYS ? WC.KEYS : {};
+  var extensionDisabledKey = storageKeys.extensionDisabled || 'local:extension-disabled';
+  var extensionDisabled = true;
+  var manuallyActivated = false;
   var cloneLogic = typeof WebCutCloneLogic !== 'undefined'
     ? WebCutCloneLogic
     : (typeof window !== 'undefined' ? window.WebCutCloneLogic : null);
@@ -44,11 +48,18 @@
     badge: null,
     listeners: []
   };
+  var toolbarDrag = {
+    active: false,
+    offsetX: 0,
+    offsetY: 0
+  };
 
   var stylesheet = document.createElement('link');
   stylesheet.rel = 'stylesheet';
   stylesheet.href = chrome.runtime.getURL('content.css');
-  stylesheet.addEventListener('load', showToolbar, { once: true });
+  stylesheet.addEventListener('load', function () {
+    showToolbarWhenEnabled(showToolbar);
+  }, { once: true });
   stylesheet.addEventListener('error', showFallback, { once: true });
   shadow.appendChild(stylesheet);
 
@@ -100,6 +111,8 @@
   closeButton.addEventListener('click', function () {
     cancelSelection();
     closeDrawer();
+    manuallyActivated = false;
+    setExtensionDisabled(true);
     host.hidden = true;
     setStatus('', 'info');
   });
@@ -120,6 +133,7 @@
   savedButton.addEventListener('click', function () {
     showDrawer();
   });
+  header.addEventListener('mousedown', startToolbarDrag);
 
   toolbarState.subscribe(function () {
     updateButtons();
@@ -129,6 +143,7 @@
   chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (!message || typeof message.type !== 'string') return undefined;
     if (message.type === messageTypes.toggleToolbar) {
+      activateExtension();
       host.hidden = false;
       if (toolbarState.get() !== 'idle') {
         sendResponse({ ok: true, visible: true, busy: true });
@@ -145,6 +160,10 @@
       return false;
     }
     if (message.type === messageTypes.toggleDrawer) {
+      if (extensionDisabled) {
+        sendResponse({ ok: true, visible: false });
+        return false;
+      }
       sendResponse({ ok: true, visible: toggleDrawer() });
       return false;
     }
@@ -152,9 +171,63 @@
   });
 
   window.addEventListener('pagehide', function () {
+    endToolbarDrag();
     cancelSelection();
     closeDrawer();
   }, true);
+
+  if (chrome.storage && chrome.storage.onChanged && typeof chrome.storage.onChanged.addListener === 'function') {
+    chrome.storage.onChanged.addListener(function (changes, areaName) {
+      if (areaName !== 'local' || !changes[extensionDisabledKey]) return;
+      extensionDisabled = changes[extensionDisabledKey].newValue === true;
+      if (extensionDisabled) {
+        manuallyActivated = false;
+        endToolbarDrag();
+        cancelSelection();
+        closeDrawer();
+        host.hidden = true;
+      } else if (manuallyActivated) {
+        host.hidden = false;
+      }
+    });
+  }
+
+  function startToolbarDrag(event) {
+    if (event.button !== 0) return;
+    var target = event.target;
+    if (target && typeof target.closest === 'function' && target.closest('button')) return;
+    var rect = toolbar.getBoundingClientRect();
+    toolbarDrag.active = true;
+    toolbarDrag.offsetX = event.clientX - rect.left;
+    toolbarDrag.offsetY = event.clientY - rect.top;
+    toolbar.style.left = rect.left + 'px';
+    toolbar.style.top = rect.top + 'px';
+    toolbar.style.transform = 'none';
+    toolbar.classList.add('is-dragging');
+    event.preventDefault();
+    window.addEventListener('mousemove', moveToolbar, true);
+    window.addEventListener('mouseup', endToolbarDrag, true);
+  }
+
+  function moveToolbar(event) {
+    if (!toolbarDrag.active) return;
+    var rect = toolbar.getBoundingClientRect();
+    var maxLeft = Math.max(0, window.innerWidth - rect.width);
+    var maxTop = Math.max(0, window.innerHeight - rect.height);
+    var left = clamp(event.clientX - toolbarDrag.offsetX, 0, maxLeft);
+    var top = clamp(event.clientY - toolbarDrag.offsetY, 0, maxTop);
+    toolbar.style.left = left + 'px';
+    toolbar.style.top = top + 'px';
+    event.preventDefault();
+  }
+
+  function endToolbarDrag() {
+    if (!toolbarDrag.active) return;
+    toolbarDrag.active = false;
+    toolbar.classList.remove('is-dragging');
+    window.removeEventListener('mousemove', moveToolbar, true);
+    window.removeEventListener('mouseup', endToolbarDrag, true);
+  }
 
   function createButton(action, label, ariaLabel) {
     var button = document.createElement('button');
@@ -1544,6 +1617,7 @@
   }
 
   function setExtensionDisabled(disabled) {
+    extensionDisabled = disabled === true;
     if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local
       || typeof chrome.storage.local.set !== 'function') {
       console.error('WebCut activation storage is unavailable.');
@@ -1564,11 +1638,13 @@
 
   function showToolbarWhenEnabled(onEnabled) {
     if (manuallyActivated) {
+      extensionDisabled = false;
       onEnabled();
       return;
     }
     if (typeof chrome === 'undefined' || !chrome.storage || !chrome.storage.local
       || typeof chrome.storage.local.get !== 'function') {
+      extensionDisabled = false;
       onEnabled();
       return;
     }
@@ -1579,7 +1655,8 @@
         console.error('WebCut could not read activation state:', lastError.message || String(lastError));
         return;
       }
-      if (values && values[extensionDisabledKey] === true) return;
+      extensionDisabled = values && values[extensionDisabledKey] === true;
+      if (extensionDisabled) return;
       onEnabled();
     });
   }
