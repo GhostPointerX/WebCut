@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "WebCut",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Capture a web page or a selected component as a standalone HTML snapshot. Runs locally in your browser.",
   "permissions": [
     "storage",

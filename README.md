@@ -91,6 +91,7 @@ Page captures use `WebCut-<website>.html`, where the website is the normalized H
 - `README.md` — user-facing project documentation.
 - `SPEC.md` — current architecture, message contract, storage shapes, and security decisions.
 - `LICENSE` — MIT license text.
+- `CHANGELOG.md` — release history, including version 1.0.0.
 - `package.json` — dependency-free Node metadata and `test` / `check` scripts.
 - `package-lock.json` — npm lockfile for the empty dependency graph.
 - `scripts/run-tests.js` — Node test-file runner.
@@ -209,7 +210,7 @@ Captures, screenshots, settings, and folder data stay in `chrome.storage.local`.
 
 ## Credits
 
-Inspired by existing page-capture tools; code written from scratch. The project was built step by step with an AI agent and numbered git tags. Tags through `step-11` are present, this step adds `step-12`, and the workflow is planned to continue through `step-13`.
+Inspired by existing page-capture tools; code written from scratch. The project was built step by step with an AI agent and numbered git tags. Tags through `step-12` are present, and this release adds the `v1.0.0` tag.
 
 ## License
 

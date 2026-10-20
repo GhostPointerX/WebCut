@@ -111,7 +111,7 @@
     updateButtons();
   });
   savedButton.addEventListener('click', function () {
-    setStatus('Saved items panel comes in a later step', 'info');
+    showDrawer();
   });
 
   toolbarState.subscribe(function () {

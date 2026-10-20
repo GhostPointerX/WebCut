@@ -1,6 +1,6 @@
 # WebCut specification
 
-This document describes the implementation in `webcut/` at Step 11. It records the current architecture and known boundaries.
+This document describes the implementation in `webcut/` for release 1.0.0. It records the current architecture and known boundaries.
 
 ## Components
 

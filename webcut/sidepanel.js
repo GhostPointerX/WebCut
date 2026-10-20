@@ -20,7 +20,6 @@
     newFolderButton: document.getElementById('new-folder-button'),
     newFolderForm: document.getElementById('new-folder-form'),
     newFolderInput: document.getElementById('new-folder-input'),
-    createFolder: document.getElementById('create-folder'),
     cancelNewFolder: document.getElementById('cancel-new-folder'),
     newFolderError: document.getElementById('new-folder-error'),
     folderList: document.getElementById('folder-list'),
