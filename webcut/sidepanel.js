@@ -9,13 +9,15 @@
   var elements = {
     searchSection: document.querySelector('.search-section'),
     searchInput: document.getElementById('search-input'),
-    clearSearch: document.getElementById('clear-search'),
-    savedCount: document.getElementById('saved-count'),
+    panelClose: document.getElementById('panel-close'),
     status: document.getElementById('status'),
     emptyState: document.getElementById('empty-state'),
     recentSection: document.getElementById('recent-section'),
     recentList: document.getElementById('recent-list'),
     recentToggle: document.getElementById('recent-toggle'),
+    recentView: document.getElementById('recent-view'),
+    recentBack: document.getElementById('recent-back'),
+    recentViewList: document.getElementById('recent-view-list'),
     foldersArea: document.getElementById('folders-area'),
     newFolderButton: document.getElementById('new-folder-button'),
     newFolderForm: document.getElementById('new-folder-form'),
@@ -47,7 +49,7 @@
   var state = {
     pages: [],
     query: '',
-    recentExpanded: false,
+    recentScrollTop: 0,
     loading: false,
     view: 'list',
     previewId: null,
@@ -615,7 +617,6 @@
     var visiblePages = logic && typeof logic.filterPages === 'function'
       ? logic.filterPages(state.pages, query)
       : [];
-    elements.savedCount.textContent = allPages.length + (allPages.length === 1 ? ' saved' : ' saved');
     elements.searchSection.hidden = false;
     elements.previewView.hidden = true;
     elements.emptyState.hidden = state.loading || hasPages || queryActive;
@@ -623,19 +624,16 @@
     elements.foldersArea.hidden = state.loading || queryActive;
     elements.resultsSection.hidden = state.loading || !queryActive;
     elements.resultsHeading.textContent = 'Search results (' + visiblePages.length + ')';
-    elements.recentToggle.textContent = state.recentExpanded ? 'Show less' : 'Show all recent';
-    elements.recentList.classList.toggle('expanded', state.recentExpanded);
+    elements.recentToggle.textContent = 'Show all recent';
+    elements.recentList.classList.remove('expanded');
     elements.newFolderForm.hidden = !state.folderFormOpen;
     elements.newFolderButton.hidden = state.folderFormOpen;
     elements.newFolderError.textContent = state.folderFormError;
     elements.newFolderError.hidden = !state.folderFormError;
     renderFolders();
     if (!state.loading && hasPages && !queryActive) {
-      if (state.recentExpanded) renderGroupedList(elements.recentList, state.pages);
-      else {
-        var recent = logic && typeof logic.pickRecent === 'function' ? logic.pickRecent(state.pages, 2) : [];
-        renderCompactList(elements.recentList, recent);
-      }
+      var recent = logic && typeof logic.pickRecent === 'function' ? logic.pickRecent(state.pages, 2) : [];
+      renderCompactList(elements.recentList, recent);
     } else {
       clearNode(elements.recentList);
     }
@@ -653,7 +651,29 @@
     if (scrollTop !== undefined) restoreScroll(scrollTop);
   }
 
+  function renderRecentView(scrollTop) {
+    elements.searchSection.hidden = true;
+    elements.emptyState.hidden = true;
+    elements.recentSection.hidden = true;
+    elements.recentView.hidden = false;
+    elements.foldersArea.hidden = true;
+    elements.resultsSection.hidden = true;
+    elements.previewView.hidden = true;
+    elements.folderView.hidden = true;
+    clearNode(elements.recentViewList);
+    if (state.pages.length) renderGroupedList(elements.recentViewList, state.pages);
+    else renderNoResults(elements.recentViewList);
+    setupScreenshotObserver();
+    refreshButtonDisabled();
+    if (scrollTop !== undefined) restoreScroll(scrollTop);
+  }
+
   function renderApp(scrollTop) {
+    elements.recentView.hidden = true;
+    if (state.view === 'recent') {
+      renderRecentView(scrollTop);
+      return;
+    }
     if (state.view === 'folder') {
       elements.searchSection.hidden = true;
       elements.emptyState.hidden = true;
@@ -1121,7 +1141,6 @@
   }
 
   function handleSearchInput() {
-    elements.clearSearch.hidden = elements.searchInput.value.trim() === '';
     if (searchTimer !== null) window.clearTimeout(searchTimer);
     searchTimer = window.setTimeout(function () {
       searchTimer = null;
@@ -1130,17 +1149,18 @@
     }, 150);
   }
 
-  function clearSearch() {
-    elements.searchInput.value = '';
-    state.query = '';
-    elements.clearSearch.hidden = true;
-    renderApp(rememberScroll());
-    elements.searchInput.focus();
+  function openRecentView() {
+    if (!state.pages.length) return;
+    state.recentScrollTop = rememberScroll();
+    state.view = 'recent';
+    renderApp(0);
   }
 
-  function toggleRecent() {
-    state.recentExpanded = !state.recentExpanded;
-    renderApp(rememberScroll());
+  function closeRecentView() {
+    var scrollTop = state.recentScrollTop;
+    state.recentScrollTop = 0;
+    state.view = 'list';
+    renderApp(scrollTop);
   }
 
   function listenForStorageChanges() {
@@ -1167,9 +1187,90 @@
     }, true);
   }
 
+  function closeSidePanel() {
+    if (inDrawer) {
+      try {
+        chrome.runtime.sendMessage({ type: messageTypes.toggleDrawer }, function () {
+          if (chrome.runtime.lastError) setStatus('Unable to close the drawer.', 'error');
+        });
+      } catch (error) {
+        setStatus('Unable to close the drawer.', 'error');
+      }
+      return;
+    }
+    if (!chrome.sidePanel || typeof chrome.sidePanel.close !== 'function') {
+      setStatus('Use the browser side panel button to close this panel.', 'info');
+      return;
+    }
+
+    function showCloseError(error) {
+      setStatus('Unable to close the side panel: ' + (error && error.message ? error.message : String(error)), 'error');
+    }
+
+    function closeForWindow() {
+      if (!chrome.windows || typeof chrome.windows.getCurrent !== 'function') {
+        showCloseError(new Error('The current browser window is unavailable.'));
+        return;
+      }
+      try {
+        chrome.windows.getCurrent(function (currentWindow) {
+          var lastError = chrome.runtime.lastError;
+          if (lastError) {
+            showCloseError(lastError);
+            return;
+          }
+          if (!currentWindow || !Number.isInteger(currentWindow.id)) {
+            showCloseError(new Error('The current browser window is unavailable.'));
+            return;
+          }
+          try {
+            var result = chrome.sidePanel.close({ windowId: currentWindow.id });
+            if (result && typeof result.catch === 'function') result.catch(showCloseError);
+          } catch (error) {
+            showCloseError(error);
+          }
+        });
+      } catch (error) {
+        showCloseError(error);
+      }
+    }
+
+    function closeForTab(tabId) {
+      try {
+        var result = chrome.sidePanel.close({ tabId: tabId });
+        if (result && typeof result.catch === 'function') result.catch(closeForWindow);
+      } catch (error) {
+        closeForWindow(error);
+      }
+    }
+
+    if (!chrome.tabs || typeof chrome.tabs.query !== 'function') {
+      closeForWindow();
+      return;
+    }
+    try {
+      chrome.tabs.query({ active: true, lastFocusedWindow: true }, function (tabs) {
+        var lastError = chrome.runtime.lastError;
+        if (lastError) {
+          closeForWindow();
+          return;
+        }
+        var activeTab = Array.isArray(tabs) ? tabs[0] : null;
+        if (!activeTab || !Number.isInteger(activeTab.id)) {
+          closeForWindow();
+          return;
+        }
+        closeForTab(activeTab.id);
+      });
+    } catch (error) {
+      closeForWindow();
+    }
+  }
+
   elements.searchInput.addEventListener('input', handleSearchInput);
-  elements.clearSearch.addEventListener('click', clearSearch);
-  elements.recentToggle.addEventListener('click', toggleRecent);
+  elements.panelClose.addEventListener('click', closeSidePanel);
+  elements.recentToggle.addEventListener('click', openRecentView);
+  elements.recentBack.addEventListener('click', closeRecentView);
   elements.previewBack.addEventListener('click', closePreview);
   elements.newFolderButton.addEventListener('click', openNewFolderForm);
   elements.cancelNewFolder.addEventListener('click', cancelNewFolder);
@@ -1186,6 +1287,7 @@
   elements.addToFolder.addEventListener('click', toggleFolderPicker);
   elements.folderPickerDone.addEventListener('click', toggleFolderPicker);
   elements.recentList.addEventListener('click', handleCardAction);
+  elements.recentViewList.addEventListener('click', handleCardAction);
   elements.resultsList.addEventListener('click', handleCardAction);
   elements.folderItems.addEventListener('click', handleCardAction);
   elements.folderPickerList.addEventListener('click', handleCardAction);

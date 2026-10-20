@@ -16,14 +16,21 @@
           <h1>WebCut</h1>
           </div>
         </div>
-        <span id="saved-count" class="saved-count">0 saved</span>
+        <div class="app-header-actions">
+          <button id="panel-close" class="icon-button panel-close" type="button" aria-label="Close side panel">×</button>
+        </div>
       </header>
 
       <section class="search-section" aria-label="Search saved captures">
         <label class="sr-only" for="search-input">Search saved pages</label>
         <div class="search-field">
+          <span class="search-icon" aria-hidden="true">
+            <svg class="search-icon-svg" viewBox="0 0 24 24" focusable="false">
+              <circle cx="11" cy="11" r="6"></circle>
+              <path d="m16 16 4 4"></path>
+            </svg>
+          </span>
           <input id="search-input" type="search" placeholder="Search saved pages" autocomplete="off" spellcheck="false">
-          <button id="clear-search" class="icon-button" type="button" aria-label="Clear search" hidden>×</button>
         </div>
       </section>
 
@@ -40,6 +47,14 @@
         </div>
         <div id="recent-list" class="recent-list"></div>
         <button id="recent-toggle" class="text-button" type="button">Show all recent</button>
+      </section>
+
+      <section id="recent-view" class="recent-view" hidden aria-labelledby="recent-view-heading">
+        <div class="recent-view-header">
+          <button id="recent-back" class="text-button" type="button">← Back</button>
+          <h2 id="recent-view-heading">All recent</h2>
+        </div>
+        <div id="recent-view-list" class="item-list"></div>
       </section>
 
       <section id="folders-area" class="folders-area" aria-labelledby="folders-heading" hidden>

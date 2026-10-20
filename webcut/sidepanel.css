@@ -53,6 +53,7 @@ input:focus-visible {
 
 .app-shell {
   display: grid;
+  align-content: start;
   gap: 14px;
   width: 100%;
   min-height: 100vh;
@@ -115,11 +116,27 @@ h2 {
   font-size: 14px;
 }
 
-.saved-count {
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 0 0 auto;
-  color: var(--muted);
-  font-size: 12px;
-  white-space: nowrap;
+}
+
+.app-header-actions .panel-close {
+  position: static;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  border: 1px solid var(--line);
+  padding: 0;
+  background: var(--panel-raised);
+  color: var(--ink);
+}
+
+.inside-drawer .panel-close {
+  display: none;
 }
 
 .search-field {
@@ -128,14 +145,45 @@ h2 {
   align-items: center;
 }
 
+.search-icon {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  z-index: 1;
+  display: grid;
+  color: var(--muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.search-icon-svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.search-field:focus-within .search-icon {
+  color: var(--accent);
+}
+
 .search-field input {
   width: 100%;
   min-height: 38px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px 38px 8px 11px;
+  padding: 8px 38px 8px 36px;
   background: var(--panel-soft);
   color: var(--ink);
+}
+
+.search-field input::-webkit-search-cancel-button,
+.search-field input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .search-field input::placeholder {
@@ -163,6 +211,11 @@ h2 {
   color: var(--ink);
 }
 
+.app-header-actions .panel-close:hover {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 .status {
   min-height: 20px;
   margin: -3px 0 0;
@@ -181,7 +234,8 @@ h2 {
 .content-section,
 .folders-area,
 .empty-state,
-.preview-view {
+.preview-view,
+.recent-view {
   min-width: 0;
 }
 
@@ -619,6 +673,33 @@ h2 {
   display: grid;
   gap: 12px;
   min-width: 0;
+}
+
+.recent-view {
+  display: grid;
+  gap: 10px;
+}
+
+.recent-view[hidden] {
+  display: none;
+}
+
+.recent-view-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.recent-view-header .text-button {
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.recent-view-header h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .folder-view[hidden] {
