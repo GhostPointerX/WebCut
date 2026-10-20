@@ -390,7 +390,7 @@ async function test(name, fn) {
      assertEqual(tabsState.injectionCalls[0].method, 'executeScript', 'script injected first');
      assertEqual(
        JSON.stringify(tabsState.injectionCalls[0].details.files),
-       JSON.stringify(['shared/messages.js', 'shared/toolbar-state.js', 'content.js']),
+        JSON.stringify(['shared/messages.js', 'shared/toolbar-state.js', 'shared/selection-logic.js', 'content.js']),
        'toolbar dependencies injected',
      );
   });
