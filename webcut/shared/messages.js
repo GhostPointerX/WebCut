@@ -35,7 +35,7 @@ var MSG = Object.freeze({
   addToFolder: 'addToFolder',
   // Request: { type: "removeFromFolder", folderId: string, pageId: string }; response: { ok: boolean, error?: string }.
   removeFromFolder: 'removeFromFolder',
-  // Request: { type: "toggleToolbar", tabId?: number }; response: { ok: boolean, error?: string, reason?: "restricted"|"no-tab"|"url-unknown"|"inject-failed"|"no-receiver" }.
+  // Request: { type: "toggleToolbar", tabId?: number, action?: "page"|"component" }; response: { ok: boolean, visible?: boolean, busy?: boolean, error?: string, reason?: "restricted"|"no-tab"|"url-unknown"|"inject-failed"|"no-receiver" }.
   toggleToolbar: 'toggleToolbar',
   // Request: { type: "toggleDrawer", tabId?: number }; response: { ok: boolean, error?: string, reason?: "restricted"|"no-tab"|"url-unknown"|"inject-failed"|"no-receiver" }.
   toggleDrawer: 'toggleDrawer'

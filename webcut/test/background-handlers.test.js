@@ -366,11 +366,12 @@ async function test(name, fn) {
   await test('toggle handlers forward through the background service worker', async () => {
     resetTabs();
     tabsState.activeTab = { id: 10, url: 'https://example.com/toggles' };
-    const toolbar = await send(WC.MSG.toggleToolbar);
+    const toolbar = await send(WC.MSG.toggleToolbar, { action: 'component' });
     const drawer = await send(WC.MSG.toggleDrawer, { tabId: 10 });
     assertEqual(toolbar.ok, true, 'toolbar toggle response');
     assertEqual(drawer.ok, true, 'drawer toggle response');
     assertEqual(tabsState.sendCalls.length, 2, 'toggle forwarding count');
+    assertEqual(tabsState.sendCalls[0].message.action, 'component', 'toggle action forwarding');
   });
 
   await test('sendToTab injects content and retries after a missing receiver', async () => {

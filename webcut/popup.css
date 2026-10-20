@@ -1,1 +1,279 @@
-/* Future popup layout and capture controls. */
+:root {
+  color-scheme: dark;
+  --ink: #f7f9fc;
+  --muted: #aab3c4;
+  --panel: #171b28;
+  --panel-strong: #202638;
+  --line: #374158;
+  --accent: #8bd5ca;
+  --accent-strong: #b8f1e7;
+  --danger: #ff9a9a;
+  --focus: #f6d87b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  width: 360px;
+  max-width: 100vw;
+  margin: 0;
+  background: #0f121b;
+  color: var(--ink);
+  font: 13px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.popup-shell {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.eyebrow {
+  margin: 0 0 2px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+h1,
+h2,
+p {
+  margin-top: 0;
+}
+
+h1 {
+  margin-bottom: 2px;
+  font-size: 25px;
+  letter-spacing: -0.03em;
+}
+
+.tagline {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.brand-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-strong);
+  color: var(--accent-strong);
+  font-weight: 900;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat-card {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.stat-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stat-value {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.capture-actions,
+.confirm-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.button {
+  min-height: 36px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 8px 11px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.button-primary {
+  background: var(--accent-strong);
+  color: #102120;
+}
+
+.button-secondary {
+  border-color: #5d7d84;
+  background: #263b45;
+  color: #e1fffa;
+}
+
+.button-quiet {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--ink);
+}
+
+.button-danger {
+  border-color: #70444d;
+  background: #3a222b;
+  color: #ffd4d4;
+}
+
+.button:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.status {
+  min-height: 20px;
+  margin: -2px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.status[data-level="success"] {
+  color: var(--accent-strong);
+}
+
+.status[data-level="error"] {
+  color: #ffb8b8;
+}
+
+.panel {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.panel summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.panel-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.field-label,
+.check-row {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.field-label span {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.text-input {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #0d1018;
+  color: var(--ink);
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding-top: 4px;
+  font-weight: 600;
+}
+
+.check-row input {
+  flex: 0 0 auto;
+  margin: 3px 0 0;
+  accent-color: var(--accent);
+}
+
+.field-error {
+  margin: 0;
+  color: #ffb8b8;
+  font-size: 12px;
+}
+
+.saved-confirmation {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.danger-zone h2 {
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+
+.danger-zone > p,
+.confirm-box p {
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.confirm-box {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #70444d;
+  border-radius: 9px;
+  background: #241820;
+}
+
+.confirm-actions {
+  grid-template-columns: 1fr 1.35fr;
+}
+
+@media (max-width: 340px) {
+  .popup-shell {
+    padding: 14px;
+  }
+
+  .confirm-actions {
+    grid-template-columns: 1fr;
+  }
+}

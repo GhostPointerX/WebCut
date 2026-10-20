@@ -116,8 +116,19 @@
   chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
     if (!message || typeof message.type !== 'string') return undefined;
     if (message.type === messageTypes.toggleToolbar) {
-      host.hidden = !host.hidden;
-      sendResponse({ ok: true, visible: !host.hidden });
+      host.hidden = false;
+      if (toolbarState.get() !== 'idle') {
+        sendResponse({ ok: true, visible: true, busy: true });
+        return false;
+      }
+      if (message.action === 'page') {
+        startExport('page', null);
+      } else if (message.action === 'component' && toolbarState.startSelecting()) {
+        beginSelection();
+        setStatus('Select mode: hover an element, use the up/down arrows to change it, click or press Enter to confirm, Escape to cancel.', 'info');
+        updateButtons();
+      }
+      sendResponse({ ok: true, visible: true });
       return false;
     }
     if (message.type === messageTypes.toggleDrawer) {

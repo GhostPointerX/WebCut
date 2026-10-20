@@ -7,10 +7,65 @@
     <link rel="stylesheet" href="popup.css">
   </head>
   <body>
-    <h1>WebCut</h1>
-    <button id="toggle-toolbar" type="button" aria-label="Toggle toolbar">Toggle toolbar</button>
-    <p id="status" role="status" aria-live="polite">Ready.</p>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <div>
+          <p class="eyebrow">LOCAL CAPTURE TOOL</p>
+          <h1>WebCut</h1>
+          <p class="tagline">Save the web, your way.</p>
+        </div>
+        <span class="brand-mark" aria-hidden="true">W</span>
+      </header>
+
+      <section class="stats" aria-label="Saved item counts">
+        <div class="stat-card">
+          <span class="stat-label">Pages</span>
+          <strong id="page-count" class="stat-value">0</strong>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Components</span>
+          <strong id="component-count" class="stat-value">0</strong>
+        </div>
+      </section>
+
+      <section class="capture-actions" aria-label="Capture actions">
+        <button id="clone-page" class="button button-primary" type="button">Clone Full Page</button>
+        <button id="clone-component" class="button button-secondary" type="button">Clone Component</button>
+        <button id="open-saved" class="button button-quiet" type="button">Open Saved Items</button>
+      </section>
+
+      <p id="status" class="status" role="status" aria-live="polite">Loading…</p>
+
+      <details id="settings-panel" class="panel">
+        <summary>Settings</summary>
+        <div class="panel-body">
+          <label class="field-label" for="host-url">Host URL <span>(optional, https only)</span></label>
+          <input id="host-url" class="text-input" type="url" inputmode="url" autocomplete="url" placeholder="https://example.com" spellcheck="false">
+          <p id="host-error" class="field-error" role="alert" hidden></p>
+
+          <label class="check-row" for="use-content-side-panel">
+            <input id="use-content-side-panel" type="checkbox">
+            <span>Use the in-page drawer instead of the side panel</span>
+          </label>
+          <p id="settings-saved" class="saved-confirmation" hidden>Saved</p>
+        </div>
+      </details>
+
+      <section class="panel danger-zone" aria-labelledby="danger-heading">
+        <h2 id="danger-heading">Danger zone</h2>
+        <p>This removes saved captures and folders but keeps your settings.</p>
+        <button id="clear-data" class="button button-danger" type="button">Clear all data</button>
+        <div id="clear-confirm" class="confirm-box" hidden>
+          <p>This deletes all saved pages, screenshots and folders. Settings are kept.</p>
+          <div class="confirm-actions">
+            <button id="cancel-clear" class="button button-quiet" type="button">Cancel</button>
+            <button id="delete-everything" class="button button-danger" type="button">Delete everything</button>
+          </div>
+        </div>
+      </section>
+    </main>
     <script src="shared/messages.js"></script>
+    <script src="shared/popup-logic.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>
