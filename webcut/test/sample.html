@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebCut Capture Test Page</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.css">
+    <style>
+      @font-face {
+        font-family: "SampleDisplay";
+        src: local("Arial");
+        font-weight: 700;
+      }
+
+      :root {
+        --ink: #172033;
+        --muted: #667085;
+        --accent: #d96c4f;
+        --accent-soft: #ffe0d6;
+        --surface: #fffaf5;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        margin: 0;
+        color: var(--ink);
+        background: var(--surface);
+        font: 16px/1.55 system-ui, sans-serif;
+      }
+
+      .page-shell {
+        width: min(1120px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 96px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr;
+        gap: 24px;
+        align-items: center;
+        padding: 32px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, var(--accent-soft), #fff);
+      }
+
+      .hero h1,
+      .hero p { margin-top: 0; }
+
+      .hero h1 {
+        margin-bottom: 8px;
+        font-family: "SampleDisplay", system-ui, sans-serif;
+        font-size: clamp(2rem, 6vw, 4.5rem);
+        line-height: 1;
+      }
+
+      .hero p { color: var(--muted); }
+
+      .hero-art {
+        min-height: 220px;
+        border-radius: 20px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Ccircle cx='80' cy='80' r='64' fill='%23d96c4f' fill-opacity='.18'/%3E%3Cpath d='M34 96c30-44 56-44 92 0' fill='none' stroke='%23d96c4f' stroke-width='10' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: 160px;
+        border: 1px solid #f2c5b7;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .card {
+        padding: 20px;
+        border: 1px solid #eadfd7;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 10px 30px rgb(76 48 37 / 8%);
+      }
+
+      .card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+      .card p { margin: 0; color: var(--muted); }
+
+      .icon {
+        width: 48px;
+        height: 48px;
+        margin-bottom: 12px;
+      }
+
+      .button-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        color: #fff;
+        background: var(--accent);
+        cursor: pointer;
+        font: inherit;
+        font-weight: 700;
+      }
+
+      .canvas-wrap {
+        display: grid;
+        place-items: center;
+        min-height: 180px;
+        margin-top: 24px;
+        border-radius: 18px;
+        background: #182338;
+      }
+
+      #capture-canvas { width: min(100%, 520px); height: 150px; }
+
+      .long-section {
+        min-height: 1250px;
+        margin-top: 24px;
+        padding: 28px;
+        border-radius: 20px;
+        background: linear-gradient(#f5eee9, #fff 18%, #eaf3f1 82%, #d9e9e5);
+      }
+
+      .long-section h2 { margin-top: 0; }
+
+      .lazy-image {
+        display: block;
+        width: min(100%, 420px);
+        height: 180px;
+        margin: 1040px auto 0;
+        object-fit: cover;
+        border-radius: 18px;
+        border: 8px solid #fff;
+        box-shadow: 0 12px 28px rgb(23 32 51 / 16%);
+      }
+
+      @media (max-width: 760px) {
+        .hero,
+        .grid { grid-template-columns: 1fr; }
+        .page-shell { width: min(100% - 20px, 1120px); padding-top: 10px; }
+        .hero { padding: 22px; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero">
+        <div>
+          <p>Manual capture fixture</p>
+          <h1>WebCut</h1>
+          <p>This page exercises layout, styles, media, scrolling, and event-handler cleanup.</p>
+          <div class="button-row">
+            <button type="button" onclick="alert('This inline handler should be removed in the capture.')">Deliberate inline handler</button>
+          </div>
+        </div>
+        <div class="hero-art" aria-label="CSS background image sample"></div>
+      </section>
+
+      <section class="grid" aria-label="Capture fixtures">
+        <article class="card">
+          <svg class="icon" viewBox="0 0 48 48" role="img" aria-label="Inline SVG icon">
+            <circle cx="24" cy="24" r="20" fill="#ffe0d6"></circle>
+            <path d="M14 26l7 7 14-16" fill="none" stroke="#d96c4f" stroke-linecap="round" stroke-linejoin="round" stroke-width="5"></path>
+          </svg>
+          <h2>Inline SVG</h2>
+          <p>The icon is part of the document markup.</p>
+        </article>
+        <article class="card">
+          <h2>CSS variables</h2>
+          <p>The layout uses custom properties for colors and spacing.</p>
+        </article>
+        <article class="card">
+          <h2>External CSS</h2>
+          <p>The head links to normalize.css on jsDelivr. Local styles keep this page usable offline.</p>
+        </article>
+      </section>
+
+      <section class="canvas-wrap" aria-label="Canvas drawing sample">
+        <canvas id="capture-canvas" width="720" height="180">Canvas is not supported.</canvas>
+      </section>
+
+      <section class="long-section">
+        <h2>Long scroll section</h2>
+        <p>Scroll near the bottom to trigger lazy loading and full-page capture steps.</p>
+        <img
+          class="lazy-image"
+          loading="lazy"
+          alt="Lazy-loaded geometric illustration"
+          src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='840' height='360' viewBox='0 0 840 360'%3E%3Crect width='840' height='360' fill='%23182338'/%3E%3Ccircle cx='180' cy='180' r='100' fill='%23d96c4f'/%3E%3Crect x='360' y='80' width='180' height='180' rx='32' fill='%23b8f1e7'/%3E%3Cpath d='M640 80l100 100-100 100-100-100z' fill='%23ffe0d6'/%3E%3C/svg%3E">
+      </section>
+    </main>
+    <script>
+      const canvas = document.getElementById('capture-canvas');
+      const context = canvas.getContext('2d');
+      context.fillStyle = '#182338';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.fillStyle = '#b8f1e7';
+      context.fillRect(64, 42, 150, 86);
+      context.fillStyle = '#d96c4f';
+      context.beginPath();
+      context.arc(360, 90, 46, 0, Math.PI * 2);
+      context.fill();
+      context.fillStyle = '#ffe0d6';
+      context.beginPath();
+      context.moveTo(570, 42);
+      context.lineTo(670, 90);
+      context.lineTo(570, 138);
+      context.closePath();
+      context.fill();
+    </script>
+  </body>
+</html>
