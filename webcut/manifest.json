@@ -48,7 +48,9 @@
     {
       "resources": [
         "sidepanel-iframe.html",
-        "content.css"
+        "content.css",
+        "preview-frame.html",
+        "preview-frame.js"
       ],
       "matches": [
         "<all_urls>"

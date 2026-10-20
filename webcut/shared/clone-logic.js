@@ -218,8 +218,16 @@
     var units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
     var index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), units.length - 1);
     var amount = value / Math.pow(1024, index);
-    var rounded = index === 0 ? Math.round(amount) : Math.round(amount * 10) / 10;
-    return rounded + ' ' + units[index];
+    if (index === 0) return Math.round(amount) + ' B';
+    if (index === 1 || index === 2) return amount.toFixed(1) + ' ' + units[index];
+    return Math.round(amount * 10) / 10 + ' ' + units[index];
+  }
+
+  function previewTitle(title, type) {
+    var value = stringValue(title).trim() || 'Untitled';
+    if (value.length > 80) value = value.slice(0, 79).trimEnd() + '…';
+    var captureType = type === 'component' ? 'component' : 'page';
+    return value + ' (' + captureType + ')';
   }
 
   var API = {
@@ -232,7 +240,8 @@
     findCssUrls: findCssUrls,
     replaceCssUrls: replaceCssUrls,
     buildComponentDocument: buildComponentDocument,
-    formatBytes: formatBytes
+    formatBytes: formatBytes,
+    previewTitle: previewTitle
   };
 
   if (root) root.WebCutCloneLogic = API;

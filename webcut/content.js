@@ -25,7 +25,9 @@
   var toolbar;
   var status;
   var statusDefault = 'Ready.';
-  var lastCapture = { id: null, fileName: '', bytes: 0, type: '' };
+  var lastCapture = { id: null, fileName: '', title: '', url: '', type: '', html: '', bytes: 0 };
+  var previewModal = null;
+  var previewRestoreFocus = null;
   var selectionLogic = typeof WebCutSelectionLogic !== 'undefined'
     ? WebCutSelectionLogic
     : (typeof window !== 'undefined' ? window.WebCutSelectionLogic : null);
@@ -252,8 +254,11 @@
         lastCapture = {
           id: saveResponse.id || null,
           fileName: fileName,
-          bytes: byteLength(capture.html),
+          title: document.title,
+          url: location.href,
           type: mode,
+          html: capture.html,
+          bytes: byteLength(capture.html),
         };
         var formatBytes = cloneLogic && typeof cloneLogic.formatBytes === 'function'
           ? cloneLogic.formatBytes
@@ -267,6 +272,12 @@
             + ' kept as links.' + warningText,
           capture.stats.warningLevel && capture.stats.warningLevel !== 'none' ? 'warning' : 'success',
         );
+        try {
+          openPreviewModal();
+        } catch (previewError) {
+          setStatus('Saved ' + fileName + ' (' + formatBytes(lastCapture.bytes) + '). Preview unavailable: '
+            + (previewError && previewError.message ? previewError.message : String(previewError)), 'error');
+        }
       } catch (error) {
         setStatus('Capture failed: ' + (error && error.message ? error.message : String(error)), 'error');
       } finally {
@@ -274,6 +285,157 @@
       }
     }());
     return true;
+  }
+
+  function createModalButton(label, className, ariaLabel) {
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = className;
+    button.textContent = label;
+    if (ariaLabel) button.setAttribute('aria-label', ariaLabel);
+    return button;
+  }
+
+  function openPreviewModal() {
+    if (!lastCapture || typeof lastCapture.html !== 'string' || !lastCapture.html) {
+      throw new Error('The saved capture has no HTML preview');
+    }
+    if (previewModal) closePreviewModal();
+    previewRestoreFocus = document.activeElement;
+
+    var overlay = document.createElement('div');
+    overlay.className = 'preview-modal-backdrop';
+    overlay.setAttribute('role', 'presentation');
+    var dialog = document.createElement('section');
+    dialog.className = 'preview-modal';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'webcut-preview-title');
+    dialog.tabIndex = -1;
+
+    var header = document.createElement('header');
+    header.className = 'preview-modal-header';
+    var heading = document.createElement('div');
+    heading.className = 'preview-modal-heading';
+    var icon = document.createElement('span');
+    icon.className = 'preview-modal-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = '⇩';
+    var headingText = document.createElement('h2');
+    headingText.id = 'webcut-preview-title';
+    headingText.className = 'preview-modal-title';
+    headingText.textContent = cloneLogic && typeof cloneLogic.previewTitle === 'function'
+      ? cloneLogic.previewTitle(lastCapture.title, lastCapture.type)
+      : (lastCapture.title || 'Untitled') + ' (' + (lastCapture.type || 'page') + ')';
+    heading.appendChild(icon);
+    heading.appendChild(headingText);
+    var closeButton = createModalButton('×', 'preview-modal-close', 'Close preview');
+    header.appendChild(heading);
+    header.appendChild(closeButton);
+
+    var info = document.createElement('div');
+    info.className = 'preview-modal-info';
+    var source = document.createElement('p');
+    source.className = 'preview-modal-source';
+    source.textContent = lastCapture.url || '';
+    source.title = lastCapture.url || '';
+    var infoActions = document.createElement('div');
+    infoActions.className = 'preview-modal-actions';
+    var size = document.createElement('span');
+    size.className = 'preview-modal-size';
+    size.textContent = cloneLogic && typeof cloneLogic.formatBytes === 'function'
+      ? cloneLogic.formatBytes(lastCapture.bytes)
+      : lastCapture.bytes + ' B';
+    var downloadButton = createModalButton('Download HTML', 'preview-modal-button preview-modal-button-primary');
+    var collectionsButton = createModalButton('View in Collections', 'preview-modal-button preview-modal-button-light');
+    infoActions.appendChild(size);
+    infoActions.appendChild(downloadButton);
+    infoActions.appendChild(collectionsButton);
+    info.appendChild(source);
+    info.appendChild(infoActions);
+
+    var notice = document.createElement('p');
+    notice.className = 'preview-modal-notice';
+    notice.hidden = true;
+
+    var frameWrap = document.createElement('div');
+    frameWrap.className = 'preview-modal-body';
+    var frame = document.createElement('iframe');
+    frame.className = 'preview-modal-frame';
+    frame.setAttribute('title', 'Captured page preview');
+    var frameUrl = chrome.runtime.getURL('preview-frame.html');
+    var targetOrigin = new URL(frameUrl).origin;
+    var previewHtml = lastCapture.html;
+    frame.addEventListener('load', function () {
+      frame.contentWindow.postMessage({ type: 'webcut-preview', html: previewHtml }, targetOrigin);
+    }, { once: true });
+    frame.src = frameUrl;
+    frameWrap.appendChild(frame);
+
+    dialog.appendChild(header);
+    dialog.appendChild(info);
+    dialog.appendChild(notice);
+    dialog.appendChild(frameWrap);
+    overlay.appendChild(dialog);
+    shadow.appendChild(overlay);
+    previewModal = {
+      overlay: overlay,
+      dialog: dialog,
+      closeButton: closeButton,
+      downloadButton: downloadButton,
+      collectionsButton: collectionsButton,
+      notice: notice,
+      keydown: function (event) {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        closePreviewModal();
+      },
+    };
+    closeButton.addEventListener('click', closePreviewModal);
+    downloadButton.addEventListener('click', downloadLastCapture);
+    collectionsButton.addEventListener('click', function () {
+      notice.textContent = 'Collections open in the side panel, coming in a later step';
+      notice.hidden = false;
+    });
+    overlay.addEventListener('click', function (event) {
+      if (event.target === overlay) closePreviewModal();
+    });
+    window.addEventListener('keydown', previewModal.keydown, true);
+    closeButton.focus();
+  }
+
+  function closePreviewModal() {
+    if (!previewModal) return;
+    var current = previewModal;
+    previewModal = null;
+    window.removeEventListener('keydown', current.keydown, true);
+    if (current.overlay && current.overlay.parentNode) current.overlay.parentNode.removeChild(current.overlay);
+    lastCapture.html = '';
+    var restore = previewRestoreFocus;
+    previewRestoreFocus = null;
+    if (restore && typeof restore.focus === 'function') restore.focus();
+  }
+
+  function downloadLastCapture() {
+    if (!lastCapture || typeof lastCapture.html !== 'string' || !lastCapture.html) {
+      setStatus('Download unavailable: the preview HTML is no longer available.', 'error');
+      return;
+    }
+    var fileName = lastCapture.fileName || 'WebCut-page.html';
+    var objectUrl = null;
+    try {
+      var blob = new Blob([lastCapture.html], { type: 'text/html;charset=utf-8' });
+      objectUrl = window.URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = objectUrl;
+      link.download = fileName;
+      link.click();
+      setStatus('Downloaded ' + fileName, 'success');
+    } catch (error) {
+      setStatus('Download failed: ' + (error && error.message ? error.message : String(error)), 'error');
+    } finally {
+      if (objectUrl) window.URL.revokeObjectURL(objectUrl);
+    }
   }
 
   function cloneForCapture(node) {

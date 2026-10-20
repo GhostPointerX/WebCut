@@ -10,6 +10,7 @@ const {
   findCssUrls,
   formatBytes,
   isEventHandlerAttr,
+  previewTitle,
   replaceCssUrls,
 } = require('../shared/clone-logic.js');
 
@@ -172,9 +173,18 @@ test('formatBytes uses readable binary units and handles invalid values', () => 
   assertEqual(formatBytes(0), '0 B', 'zero bytes');
   assertEqual(formatBytes(1023), '1023 B', 'bytes');
   assertEqual(formatBytes(1536), '1.5 KB', 'kilobytes');
-  assertEqual(formatBytes(1048576), '1 MB', 'megabytes');
+  assertEqual(formatBytes(1048576), '1.0 MB', 'megabytes');
+  assertEqual(formatBytes(512), '512 B', 'small bytes');
   assertEqual(formatBytes(-1), '0 B', 'negative bytes');
   assertEqual(formatBytes(NaN), '0 B', 'invalid bytes');
+});
+
+test('previewTitle labels captures and truncates long titles', () => {
+  assertEqual(previewTitle('  Home page  ', 'page'), 'Home page (page)', 'page title');
+  assertEqual(previewTitle('', 'component'), 'Untitled (component)', 'empty title');
+  const longTitle = previewTitle('x'.repeat(100), 'page');
+  assertEqual(longTitle.length, 87, 'truncated title with type');
+  assertEqual(longTitle, `${'x'.repeat(79)}… (page)`, 'ellipsis title');
 });
 
 const passed = cases.filter((item) => item.passed).length;

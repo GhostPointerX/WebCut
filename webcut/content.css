@@ -142,6 +142,202 @@ h1 {
   color: #ffb4ab;
 }
 
+.preview-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  pointer-events: auto;
+  background: rgb(5 8 15 / 72%);
+}
+
+.preview-modal {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, calc(100vw - 16px));
+  height: min(760px, calc(100vh - 16px));
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--webcut-text);
+  background: var(--webcut-panel);
+  border: 1px solid var(--webcut-border);
+  border-radius: var(--webcut-radius);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 48%);
+  animation: webcut-preview-in 160ms ease-out both;
+}
+
+.preview-modal-header,
+.preview-modal-info {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.preview-modal-header {
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--webcut-bg);
+  border-bottom: 1px solid var(--webcut-border);
+}
+
+.preview-modal-heading,
+.preview-modal-actions {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.preview-modal-heading {
+  gap: 8px;
+}
+
+.preview-modal-icon {
+  flex: 0 0 auto;
+  color: var(--webcut-accent);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.preview-modal-title,
+.preview-modal-source {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-modal-title {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.preview-modal-close {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--webcut-text);
+  font: 22px/1 var(--webcut-font);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--webcut-radius-small);
+  cursor: pointer;
+}
+
+.preview-modal-close:hover {
+  color: var(--webcut-accent-strong);
+  background: rgb(255 255 255 / 8%);
+  border-color: var(--webcut-border);
+}
+
+.preview-modal-info {
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #262c3b;
+  border-bottom: 1px solid var(--webcut-border);
+}
+
+.preview-modal-source {
+  flex: 1 1 220px;
+  color: var(--webcut-muted);
+  font-size: 11px;
+}
+
+.preview-modal-actions {
+  flex: 0 1 auto;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.preview-modal-size {
+  color: var(--webcut-accent-strong);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.preview-modal-button {
+  min-height: 32px;
+  padding: 7px 10px;
+  font: 600 11px/1.2 var(--webcut-font);
+  border: 1px solid var(--webcut-border);
+  border-radius: var(--webcut-radius-small);
+  cursor: pointer;
+}
+
+.preview-modal-button-primary {
+  color: #10151f;
+  background: var(--webcut-accent-strong);
+  border-color: var(--webcut-accent);
+}
+
+.preview-modal-button-light {
+  color: var(--webcut-text);
+  background: rgb(255 255 255 / 8%);
+}
+
+.preview-modal-button:hover {
+  filter: brightness(1.08);
+}
+
+.preview-modal-close:focus-visible,
+.preview-modal-button:focus-visible,
+.preview-modal:focus-visible {
+  outline: 2px solid var(--webcut-accent);
+  outline-offset: 2px;
+}
+
+.preview-modal-notice {
+  margin: 8px 14px 0;
+  padding: 7px 9px;
+  color: #f6d365;
+  font-size: 11px;
+  background: rgb(246 211 101 / 10%);
+  border: 1px solid rgb(246 211 101 / 35%);
+  border-radius: var(--webcut-radius-small);
+}
+
+.preview-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 10px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--webcut-border);
+  border-radius: var(--webcut-radius-small);
+}
+
+.preview-modal-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@keyframes webcut-preview-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 520px) {
+  .preview-modal-source,
+  .preview-modal-actions {
+    flex-basis: 100%;
+  }
+
+  .preview-modal-actions {
+    justify-content: flex-start;
+  }
+}
+
 .selection-overlay,
 .selection-highlight,
 .selection-badge {
@@ -182,6 +378,10 @@ h1 {
 
 @media (prefers-reduced-motion: reduce) {
   .toolbar {
+    animation: none;
+  }
+
+  .preview-modal {
     animation: none;
   }
 
