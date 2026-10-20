@@ -694,7 +694,7 @@ async function injectContent(tabId) {
   if (!chrome.scripting) throw new Error('chrome.scripting is unavailable');
   await chromeCall(chrome.scripting, 'executeScript', [{
     target: { tabId },
-    files: ['shared/messages.js', 'shared/toolbar-state.js', 'shared/selection-logic.js', 'content.js'],
+    files: ['shared/messages.js', 'shared/toolbar-state.js', 'shared/selection-logic.js', 'shared/clone-logic.js', 'content.js'],
   }]);
 }
 

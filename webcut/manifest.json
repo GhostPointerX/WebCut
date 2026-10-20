@@ -38,6 +38,7 @@
         "shared/messages.js",
         "shared/toolbar-state.js",
         "shared/selection-logic.js",
+        "shared/clone-logic.js",
         "content.js"
       ],
       "run_at": "document_idle"

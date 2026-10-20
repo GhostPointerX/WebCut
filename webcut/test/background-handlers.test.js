@@ -389,8 +389,8 @@ async function test(name, fn) {
      assertEqual(tabsState.injectionCalls.length, 1, 'script injection count');
      assertEqual(tabsState.injectionCalls[0].method, 'executeScript', 'script injected first');
      assertEqual(
-       JSON.stringify(tabsState.injectionCalls[0].details.files),
-        JSON.stringify(['shared/messages.js', 'shared/toolbar-state.js', 'shared/selection-logic.js', 'content.js']),
+        JSON.stringify(tabsState.injectionCalls[0].details.files),
+         JSON.stringify(['shared/messages.js', 'shared/toolbar-state.js', 'shared/selection-logic.js', 'shared/clone-logic.js', 'content.js']),
        'toolbar dependencies injected',
      );
   });

@@ -19,6 +19,9 @@
   var stateApi = typeof WebCutToolbarState !== 'undefined' ? WebCutToolbarState : null;
   var toolbarState = stateApi ? stateApi.createToolbarState() : createFallbackState();
   var messageTypes = typeof WC !== 'undefined' && WC.MSG ? WC.MSG : {};
+  var cloneLogic = typeof WebCutCloneLogic !== 'undefined'
+    ? WebCutCloneLogic
+    : (typeof window !== 'undefined' ? window.WebCutCloneLogic : null);
   var toolbar;
   var status;
   var statusDefault = 'Ready.';
@@ -220,16 +223,358 @@
   function startExport(mode, element) {
     if (!toolbarState.startExport()) return false;
     cleanupSelection();
-    if (mode === 'component') {
-      setStatus('Selected ' + describeTarget(element) + '. Capture comes in a later step.', 'success');
-    } else {
-      setStatus('Full page capture comes in a later step', 'info');
-    }
     updateButtons();
-    setTimeout(function () {
-      if (toolbarState.finish()) updateButtons();
-    }, 120);
+    (async function () {
+      try {
+        setStatus(mode === 'page' ? 'Scrolling…' : 'Collecting styles…', 'info');
+        var capture = await captureParts(mode, element);
+        var htmlKb = Math.ceil(byteLength(capture.html) / 1024);
+        var cssKb = Math.ceil(byteLength(capture.css) / 1024);
+        setStatus(
+          'Captured ' + htmlKb + ' KB HTML, ' + cssKb + ' KB CSS, '
+            + capture.stats.sheetsOk + ' sheets ok, ' + capture.stats.sheetsFailed
+            + ' failed. Saving comes in the next step.',
+          'success',
+        );
+      } catch (error) {
+        setStatus('Capture failed: ' + (error && error.message ? error.message : String(error)), 'error');
+      } finally {
+        if (toolbarState.finish()) updateButtons();
+      }
+    }());
     return true;
+  }
+
+  function cloneForCapture(node) {
+    if (!node) throw new Error('Capture target is unavailable');
+    if (typeof node.cloneNode !== 'function') throw new Error('Capture target cannot be cloned');
+    return node.cloneNode(true);
+  }
+
+  function byteLength(value) {
+    if (typeof value !== 'string') return 0;
+    if (typeof TextEncoder === 'function') return new TextEncoder().encode(value).length;
+    return value.length;
+  }
+
+  function wait(milliseconds) {
+    return new Promise(function (resolve) {
+      window.setTimeout(resolve, milliseconds);
+    });
+  }
+
+  function documentScrollHeight() {
+    return Math.max(
+      document.documentElement ? document.documentElement.scrollHeight : 0,
+      document.body ? document.body.scrollHeight : 0,
+    );
+  }
+
+  async function performAutoScroll(onProgress) {
+    if (!cloneLogic || typeof cloneLogic.computeScrollSteps !== 'function') {
+      throw new Error('Clone scroll logic is unavailable');
+    }
+    if (typeof onProgress !== 'function') onProgress = function () {};
+    var originalX = Number.isFinite(window.scrollX) ? window.scrollX : (window.pageXOffset || 0);
+    var originalY = Number.isFinite(window.scrollY) ? window.scrollY : (window.pageYOffset || 0);
+    var initialHeight = documentScrollHeight();
+    var viewportHeight = Math.max(window.innerHeight || 0, 1);
+    var passHeight = initialHeight;
+    try {
+      for (var pass = 0; pass < 2; pass += 1) {
+        var steps = cloneLogic.computeScrollSteps(passHeight, viewportHeight);
+        for (var index = 0; index < steps.length; index += 1) {
+          window.scrollTo({ top: steps[index], behavior: 'instant' });
+          await wait(450);
+          onProgress(index + 1, steps.length);
+        }
+        if (pass !== 0) break;
+        var firstPassHeight = documentScrollHeight();
+        if (!(firstPassHeight > initialHeight * 1.2)) break;
+        passHeight = firstPassHeight;
+      }
+    } finally {
+      window.scrollTo({ left: originalX, top: originalY, behavior: 'instant' });
+    }
+  }
+
+  function isPrintOnly(media) {
+    var mediaText = media && typeof media.mediaText === 'string' ? media.mediaText : String(media || '');
+    if (!mediaText.trim()) return false;
+    return mediaText.split(',').every(function (item) {
+      return /^\s*(?:only\s+)?print\s*$/i.test(item);
+    });
+  }
+
+  function stylesheetIsPrintOnly(sheet) {
+    return Boolean(sheet && (isPrintOnly(sheet.media) || isPrintOnly(sheet.mediaText)));
+  }
+
+  function sendRuntimeMessage(message) {
+    return new Promise(function (resolve, reject) {
+      if (typeof chrome === 'undefined' || !chrome.runtime || typeof chrome.runtime.sendMessage !== 'function') {
+        reject(new Error('Resource messaging is unavailable'));
+        return;
+      }
+      var settled = false;
+      function finish(error, value) {
+        if (settled) return;
+        settled = true;
+        if (error) reject(error);
+        else resolve(value);
+      }
+      function callback(response) {
+        var lastError = chrome.runtime.lastError;
+        if (lastError) finish(new Error(lastError.message || String(lastError)));
+        else finish(null, response);
+      }
+      try {
+        var returned = chrome.runtime.sendMessage(message, callback);
+        if (returned && typeof returned.then === 'function') returned.then(function (value) {
+          finish(null, value);
+        }, finish);
+      } catch (error) {
+        finish(error);
+      }
+    });
+  }
+
+  function absoluteUrl(value, baseUrl) {
+    try {
+      return new URL(value, baseUrl).href;
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function isHttpUrl(value) {
+    try {
+      var protocol = new URL(value).protocol;
+      return protocol === 'http:' || protocol === 'https:';
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function addFailedUrl(stats, url) {
+    if (typeof url !== 'string' || !url) return;
+    if (stats.failedUrls.indexOf(url) === -1 && stats.failedUrls.length < 10) {
+      stats.failedUrls.push(url);
+    }
+  }
+
+  function cssBytes(css) {
+    return byteLength(css);
+  }
+
+  async function collectCss() {
+    var chunks = [];
+    var stats = { sheetsOk: 0, sheetsFailed: 0, failedUrls: [], cssBytes: 0 };
+    var visitedSheets = new Set();
+    var visitedHrefs = new Set();
+
+    function sheetHref(sheet, fallback) {
+      var value = sheet && typeof sheet.href === 'string' && sheet.href ? sheet.href : fallback;
+      return value ? absoluteUrl(value, document.baseURI) : '';
+    }
+
+    function markVisited(sheet, href) {
+      if (href) {
+        if (visitedHrefs.has(href)) return false;
+        visitedHrefs.add(href);
+        return true;
+      }
+      if (visitedSheets.has(sheet)) return false;
+      visitedSheets.add(sheet);
+      return true;
+    }
+
+    async function fetchSheet(url) {
+      if (!isHttpUrl(url)) throw new Error('Stylesheet URL is not fetchable');
+      var response = await sendRuntimeMessage({
+        type: messageTypes.fetchResource,
+        url: url,
+        as: 'text'
+      });
+      if (!response || response.ok !== true || typeof response.text !== 'string') {
+        throw new Error(response && response.error ? response.error : 'Stylesheet fetch failed');
+      }
+      chunks.push(cloneLogic.absolutizeCssUrls(response.text, url));
+      stats.sheetsOk += 1;
+    }
+
+    async function processSheet(sheet, depth, fallbackHref) {
+      if (!sheet || sheet.disabled || stylesheetIsPrintOnly(sheet)) return;
+      var href = sheetHref(sheet, fallbackHref);
+      if (!markVisited(sheet, href)) return;
+      if (depth > 5) {
+        stats.sheetsFailed += 1;
+        addFailedUrl(stats, href);
+        return;
+      }
+
+      var rules;
+      try {
+        rules = sheet.cssRules;
+      } catch (error) {
+        if (isHttpUrl(href)) {
+          try {
+            await fetchSheet(href);
+          } catch (fetchError) {
+            stats.sheetsFailed += 1;
+            addFailedUrl(stats, href);
+          }
+        } else {
+          stats.sheetsFailed += 1;
+        }
+        return;
+      }
+
+      try {
+        var ruleText = [];
+        for (var i = 0; i < rules.length; i += 1) {
+          var rule = rules[i];
+          var isImport = Boolean(rule && (rule.type === 3 || rule.styleSheet || typeof rule.href === 'string'));
+          if (isImport) {
+            var importHref = rule.href ? absoluteUrl(rule.href, href || document.baseURI) : '';
+            var importedSheet = null;
+            try {
+              importedSheet = rule.styleSheet || null;
+            } catch (error) {
+              importedSheet = null;
+            }
+            if (importedSheet) {
+              await processSheet(importedSheet, depth + 1, importHref);
+            } else if (isHttpUrl(importHref)) {
+              if (depth + 1 > 5) {
+                stats.sheetsFailed += 1;
+                addFailedUrl(stats, importHref);
+              } else if (markVisited(null, importHref)) {
+                try {
+                  await fetchSheet(importHref);
+                } catch (fetchError) {
+                  stats.sheetsFailed += 1;
+                  addFailedUrl(stats, importHref);
+                }
+              }
+            } else {
+              stats.sheetsFailed += 1;
+            }
+          } else if (rule && typeof rule.cssText === 'string') {
+            ruleText.push(rule.cssText);
+          }
+        }
+        if (ruleText.length) {
+          chunks.push(cloneLogic.absolutizeCssUrls(ruleText.join('\n'), href || document.baseURI));
+        }
+        stats.sheetsOk += 1;
+      } catch (error) {
+        stats.sheetsFailed += 1;
+        addFailedUrl(stats, href);
+      }
+    }
+
+    var sheets = document.styleSheets ? Array.prototype.slice.call(document.styleSheets) : [];
+    for (var i = 0; i < sheets.length; i += 1) await processSheet(sheets[i], 0, '');
+    var adopted = document.adoptedStyleSheets ? Array.prototype.slice.call(document.adoptedStyleSheets) : [];
+    for (var j = 0; j < adopted.length; j += 1) await processSheet(adopted[j], 0, '');
+    var css = chunks.join('\n');
+    stats.cssBytes = cssBytes(css);
+    return { css: css, stats: stats };
+  }
+
+  function isRemovableCloneNode(node) {
+    var tag = node && node.nodeType === 1 && String(node.tagName).toLowerCase();
+    if (tag === 'script' || tag === 'noscript' || tag === 'webcut-ui-root' || tag === 'style' || tag === 'base') return true;
+    if (tag !== 'link') return false;
+    var rel = String(node.getAttribute('rel') || '').toLowerCase().split(/\s+/).filter(Boolean);
+    return rel.indexOf('stylesheet') !== -1 || rel.indexOf('preload') !== -1
+      || rel.indexOf('prefetch') !== -1 || rel.indexOf('modulepreload') !== -1;
+  }
+
+  function cleanCloneAttributes(node) {
+    if (!node.attributes) return;
+    var attributes = Array.prototype.slice.call(node.attributes);
+    attributes.forEach(function (attribute) {
+      var name = String(attribute.name || '').toLowerCase();
+      var value = String(attribute.value || '');
+      var isHandler = cloneLogic && typeof cloneLogic.isEventHandlerAttr === 'function'
+        ? cloneLogic.isEventHandlerAttr(attribute.name)
+        : /^on[a-z]+$/i.test(attribute.name);
+      if (isHandler) {
+        node.removeAttribute(attribute.name);
+      } else if ((name === 'href' || name === 'src' || name === 'action')
+        && /^\s*javascript\s*:/i.test(value)) {
+        node.setAttribute(attribute.name, '#');
+      }
+    });
+  }
+
+  function cleanDomNode(root) {
+    if (!root) return root;
+    if (root.nodeType === 1) cleanCloneAttributes(root);
+    var children = root.childNodes ? Array.prototype.slice.call(root.childNodes) : [];
+    children.forEach(function (child) {
+      if (child.nodeType !== 1) return;
+      if (isRemovableCloneNode(child)) {
+        if (child.parentNode) child.parentNode.removeChild(child);
+        return;
+      }
+      cleanCloneAttributes(child);
+      if (String(child.tagName).toLowerCase() === 'template' && child.content) cleanDomNode(child.content);
+      else if (String(child.tagName).toLowerCase() !== 'iframe') cleanDomNode(child);
+    });
+    return root;
+  }
+
+  function recordAttributes(element) {
+    var result = {};
+    if (!element || !element.attributes) return result;
+    Array.prototype.forEach.call(element.attributes, function (attribute) {
+      result[attribute.name] = attribute.value;
+    });
+    return result;
+  }
+
+  function computedElementWidth(element) {
+    var computed = typeof window.getComputedStyle === 'function' ? window.getComputedStyle(element) : null;
+    if (computed && computed.width && computed.width !== 'auto') return computed.width;
+    var rect = element && typeof element.getBoundingClientRect === 'function' ? element.getBoundingClientRect() : null;
+    return rect && Number.isFinite(rect.width) ? rect.width + 'px' : '';
+  }
+
+  async function captureParts(mode, element) {
+    if (mode !== 'page' && mode !== 'component') throw new Error('Unknown capture mode');
+    if (mode === 'component' && (!element || !isElementConnected(element))) throw new Error('Selected component is no longer available');
+    if (mode === 'page') {
+      await performAutoScroll(function (index, total) {
+        setStatus('Scrolling ' + index + '/' + total, 'info');
+      });
+    }
+    var clone = cleanDomNode(cloneForCapture(mode === 'page' ? document.documentElement : element));
+    setStatus('Collecting styles…', 'info');
+    var css = await collectCss();
+    var htmlAttrs = mode === 'component' ? recordAttributes(document.documentElement) : {};
+    var bodyAttrs = mode === 'component' ? recordAttributes(document.body) : {};
+    var computedWidth = mode === 'component' ? computedElementWidth(element) : '';
+    var stats = {
+      sheetsOk: css.stats.sheetsOk,
+      sheetsFailed: css.stats.sheetsFailed,
+      failedUrls: css.stats.failedUrls,
+      cssBytes: css.stats.cssBytes,
+    };
+    return {
+      mode: mode,
+      title: document.title,
+      url: location.href,
+      htmlAttrs: htmlAttrs,
+      bodyAttrs: bodyAttrs,
+      computedWidth: computedWidth,
+      html: clone.outerHTML,
+      css: css.css,
+      stats: stats,
+      capturedAt: Date.now(),
+    };
   }
 
   function onSelectionMouseMove(event) {
